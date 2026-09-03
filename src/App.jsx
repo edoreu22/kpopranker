@@ -4298,7 +4298,7 @@ export default function KpopRanker() {
     setShowNewList(false);
     setShowListOptions(true);
   }
-  function exportList() {
+  function exportList(format = "json") {
     const rows = ranked.map((s) => ({
       rank: s.rank,
       title: s.title,
@@ -4309,7 +4309,7 @@ export default function KpopRanker() {
       effectiveScore: effectiveScore(activeList, s),
       categoryScores: s.categoryScores || {},
       tier: s.tier || "",
-      awards: (s.awards || []).map((a) => ({ emoji: a.emoji, label: a.label })),
+      awards: (s.awards || []).map((a) => ({ emoji: a.emoji, label: a.label, highlighted: !!a.highlighted })),
       notes: (s.notes || []).map((n) => ({ author: n.author, text: n.text, ts: n.ts })),
       addedBy: s.addedBy || "",
     }));
@@ -4322,11 +4322,25 @@ export default function KpopRanker() {
       exportedAt: new Date().toISOString(),
       songs: rows,
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const filenameBase = activeList.name.replace(/[^a-z0-9]+/gi, "_");
+    let blob, filename;
+    if (format === "txt") {
+      const lines = rows.map((r) => {
+        const parts = [r.rank, r.title, r.artist, r.album || "—", r.year || "—", r.score ?? "—", r.tier || "—"];
+        const awardsStr = r.awards.length ? " " + r.awards.map((a) => a.emoji + (a.highlighted ? "*" : "")).join(" ") : "";
+        return parts.join(" | ") + awardsStr;
+      });
+      const header = `${payload.listName}${payload.tags ? " — " + payload.tags : ""}\nExported ${new Date(payload.exportedAt).toLocaleString()}\nScore scale: /${payload.scoreScale}\n\nRank | Title | Artist | Album | Year | Score | Tier | Awards\n${"-".repeat(60)}\n`;
+      blob = new Blob([header + lines.join("\n")], { type: "text/plain" });
+      filename = `${filenameBase}.txt`;
+    } else {
+      blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      filename = `${filenameBase}.json`;
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${activeList.name.replace(/[^a-z0-9]+/gi, "_")}.json`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -4414,6 +4428,65 @@ export default function KpopRanker() {
     }).filter((s) => s.title);
   }, [bulkText]);
 
+  function parseExportedTxt(text) {
+    const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+    const songs = [];
+    for (const line of lines) {
+      if (!line.includes("|")) continue;
+      const parts = line.split("|").map((p) => p.trim());
+      if (parts.length < 3) continue;
+      const rankNum = Number(parts[0]);
+      if (!Number.isFinite(rankNum) || parts[1] === "Title") continue;
+      const [, title, artist, album, year, score, tier] = parts;
+      songs.push({
+        title: title || "",
+        artist: artist || "",
+        album: album && album !== "—" ? album : "",
+        year: year && year !== "—" && !isNaN(Number(year)) ? Number(year) : null,
+        score: score && score !== "—" && !isNaN(Number(score)) ? Number(score) : null,
+        tier: tier && tier !== "—" ? tier : "",
+      });
+    }
+    return songs.filter((s) => s.title);
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || "");
+      if (file.name.toLowerCase().endsWith(".json")) {
+        try {
+          const data = JSON.parse(text);
+          const rows = Array.isArray(data) ? data : (data.songs || []);
+          const newSongs = rows.map((r) => makeSongObj({
+            title: r.title, artist: r.artist, album: r.album, year: r.year,
+            score: r.score, tier: r.tier, categoryScores: r.categoryScores,
+            awards: r.awards, notes: r.notes,
+          })).filter((s) => s.title);
+          if (!newSongs.length) { setError("No songs found in that file."); return; }
+          updateActiveSongs((songs) => [...newSongs, ...songs]);
+          recordAdd(`Imported ${newSongs.length} song${newSongs.length === 1 ? "" : "s"}`, newSongs.map((s) => s.id));
+          setShowImport(false);
+        } catch (err) { setError("Couldn't read that JSON file — make sure it's a list exported from this app."); }
+      } else {
+        if (text.includes(" | ")) {
+          const parsed = parseExportedTxt(text);
+          if (!parsed.length) { setError("No songs found in that file."); return; }
+          const newSongs = parsed.map((s) => makeSongObj(s));
+          updateActiveSongs((songs) => [...newSongs, ...songs]);
+          recordAdd(`Imported ${newSongs.length} song${newSongs.length === 1 ? "" : "s"}`, newSongs.map((s) => s.id));
+          setShowImport(false);
+        } else {
+          setBulkText(text);
+        }
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
   function addBulkSongs() {
     if (!bulkParsed.length) return;
     const newSongs = bulkParsed.map((s) => makeSongObj(s));
@@ -4446,11 +4519,14 @@ export default function KpopRanker() {
     const draft = awardDrafts[songId] || {};
     const emoji = emojiOverride || draft.emoji || "🏆";
     const label = (draft.label || "").trim();
-    updateActiveSongs((songs) => songs.map((s) => (s.id === songId ? { ...s, awards: [...(s.awards || []), { emoji, label }] } : s)));
+    updateActiveSongs((songs) => songs.map((s) => (s.id === songId ? { ...s, awards: [...(s.awards || []), { emoji, label, highlighted: false }] } : s)));
     setAwardDrafts({ ...awardDrafts, [songId]: { emoji: "🏆", label: "" } });
     setAwardPickerFor(null);
   }
   function removeAward(songId, idx) { updateActiveSongs((songs) => songs.map((s) => (s.id === songId ? { ...s, awards: s.awards.filter((_, i) => i !== idx) } : s))); }
+  function toggleAwardHighlight(songId, idx) {
+    updateActiveSongs((songs) => songs.map((s) => (s.id === songId ? { ...s, awards: s.awards.map((a, i) => (i === idx ? { ...a, highlighted: !a.highlighted } : a)) } : s)));
+  }
 
   const artistsInList = useMemo(() => {
     const map = new Map();
@@ -4760,12 +4836,15 @@ export default function KpopRanker() {
         .kp-row-bg { position: absolute; inset: 0; border-radius: 10px; overflow: hidden; z-index: 0; }
         .kp-row-bg img { width: 100%; height: 100%; object-fit: cover; }
         .kp-row-bg .dim { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
-        .kp-row { position: relative; z-index: 1; display: grid; grid-template-columns: 46px 1.5fr 1fr 68px 26px 30px; gap: 8px; align-items: center; }
+        .kp-row { position: relative; z-index: 1; display: grid; grid-template-columns: 44px 1.4fr 1fr 46px 56px minmax(60px, auto) 26px 30px; gap: 8px; align-items: center; }
         @media (max-width: 760px) {
-          .kp-row { grid-template-columns: 36px 1fr 58px 22px 22px; }
+          .kp-row { grid-template-columns: 34px 1fr 40px 50px minmax(44px, auto) 22px 22px; }
           .col-album { display: none; }
           .kp-grid-2 { grid-template-columns: 1fr !important; }
         }
+        .award-badge { background: none; border: 1px solid transparent; border-radius: 6px; font-size: 14px; padding: 2px 3px; cursor: pointer; line-height: 1; }
+        .award-badge:hover { background: #35304D; }
+        .award-badge.highlighted { background: rgba(255, 201, 87, 0.18); border-color: ${GOLD}; box-shadow: 0 0 0 1px ${GOLD} inset; }
         .result-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid ${BORDER}; gap: 10px; }
         .mode-toggle { display: inline-flex; border: 1px solid ${BORDER}; border-radius: 8px; overflow: hidden; }
         .mode-toggle button { padding: 8px 14px; font-size: 13px; border: none; cursor: pointer; background: transparent; color: ${MUTED}; }
@@ -4918,7 +4997,10 @@ export default function KpopRanker() {
           <div>
             <div className="kp-row" style={{ padding: "0 14px 8px", fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em" }}>
               <span>Rank</span><span>Song / Artist</span><span className="col-album">Album</span>
-              <span style={{ textAlign: "center" }}>{activeList.showScore || activeList.showTier ? "Score/Tier" : ""}</span><span></span><span></span>
+              <span style={{ textAlign: "center" }}>{activeList.showScore ? "Score" : ""}</span>
+              <span style={{ textAlign: "center" }}>{activeList.showTier ? "Tier" : ""}</span>
+              <span style={{ textAlign: "center" }}>Awards</span>
+              <span></span><span></span>
             </div>
             {visibleRanked.map((song, idx) => {
               const isExpanded = expandedId === song.id;
@@ -4942,14 +5024,13 @@ export default function KpopRanker() {
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 14, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {song.title}
-                        {(song.awards || []).map((a, i) => <span key={i} title={a.label || ""} style={{ marginLeft: 5 }}>{a.emoji}</span>)}
                       </div>
                       <div style={{ fontSize: 12, color: theme.secondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</div>
                     </div>
                     <span className="col-album" style={{ fontSize: 12.5, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {song.album || "—"}{song.year ? ` · ${song.year}` : ""}
                     </span>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                    <div style={{ textAlign: "center" }}>
                       {activeList.showScore && (
                         activeList.advancedMode ? (
                           <span className="score-input" title={breakdown} style={{ cursor: "help", color: scoreColor }}>{score != null ? score : "—"}</span>
@@ -4958,6 +5039,8 @@ export default function KpopRanker() {
                             onChange={(e) => updateSongField(song.id, "score", e.target.value === "" ? null : Math.min(scoreScale, Number(e.target.value)))} />
                         )
                       )}
+                    </div>
+                    <div style={{ textAlign: "center" }}>
                       {activeList.showTier && (
                         activeList.tierNames?.length ? (
                           <select className="tier-input" style={{ color: tierColorFor(activeList, tierVal) }} value={tierVal === "NULL" ? "" : tierVal} onChange={(e) => setTierManual(song.id, e.target.value)}>
@@ -4968,6 +5051,12 @@ export default function KpopRanker() {
                           <input className="tier-input" style={{ background: "transparent", border: "1px solid transparent" }} value={tierVal === "NULL" ? "" : tierVal} placeholder="—" onChange={(e) => setTierManual(song.id, e.target.value)} />
                         )
                       )}
+                    </div>
+                    <div className="awards-cell" style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: 3 }}>
+                      {(song.awards || []).map((a, i) => (
+                        <button key={i} type="button" className={`award-badge${a.highlighted ? " highlighted" : ""}`} title={a.label || ""}
+                          onClick={() => toggleAwardHighlight(song.id, i)}>{a.emoji}</button>
+                      ))}
                     </div>
                     <button className="icon-btn" style={{ width: 24, height: 24, border: "none", position: "relative" }} title="Notes" onClick={() => setNotePopoverFor(notePopoverFor === song.id ? null : song.id)}>
                       <StickyNote size={14} color={(song.notes || []).length ? theme.secondary : MUTED} />
@@ -5072,7 +5161,12 @@ export default function KpopRanker() {
       {/* Import List modal */}
       {showImport && (
         <Modal title="Import list" onClose={() => setShowImport(false)} wide>
-          <div style={{ fontSize: 12, color: theme.secondary, marginBottom: 4, fontWeight: 600 }}>Song, Artist, Album, Year, Score, Tier</div>
+          <label className="kp-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 12, cursor: "pointer" }}>
+            <Download size={13} style={{ transform: "rotate(180deg)" }} /> Upload .txt or .json file
+            <input type="file" accept=".txt,.json,text/plain,application/json" style={{ display: "none" }} onChange={handleImportFile} />
+          </label>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 14 }}>.json files exported from this app import fully, including awards and notes. .txt files import title/artist/album/year/score/tier.</div>
+          <div style={{ fontSize: 12, color: theme.secondary, marginBottom: 4, fontWeight: 600 }}>Or paste directly — Song, Artist, Album, Year, Score, Tier</div>
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 10 }}>One per line. Tabs from a spreadsheet paste work automatically.</div>
           <textarea className="kp-input" style={{ minHeight: 160, resize: "vertical", fontFamily: "monospace", fontSize: 12.5, lineHeight: 1.6 }} placeholder={"I Want U, SHINee, The Story of Light, 2016, 95, X"} value={bulkText} onChange={(e) => setBulkText(e.target.value)} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
@@ -5497,7 +5591,8 @@ export default function KpopRanker() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `1px solid ${BORDER}`, paddingTop: 16 }}>
             <div style={{ display: "flex", gap: 8 }}>
               <button className="kp-btn-ghost" onClick={duplicateList}><Copy size={13} /> Duplicate this list</button>
-              <button className="kp-btn-ghost" onClick={exportList}><Download size={13} /> Export list</button>
+              <button className="kp-btn-ghost" onClick={() => exportList("json")}><Download size={13} /> Export .json</button>
+              <button className="kp-btn-ghost" onClick={() => exportList("txt")}><Download size={13} /> Export .txt</button>
             </div>
             {confirmDeleteList ? (
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
