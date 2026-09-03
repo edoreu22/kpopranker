@@ -4157,7 +4157,7 @@ function BgImg({ src }) {
 
 const DEFAULT_LIST = () => ({
   id: "default", name: "All Kpop Songs Ranked", tags: [], createdAt: Date.now(), songs: [],
-  scoreScale: 100, showScore: true, showTier: true,
+  scoreScale: 100, showScore: true, showTier: true, autoArtistImages: false,
   advancedMode: false, advancedScoreMode: "sum", categories: DEFAULT_CATEGORIES(),
   tierNames: DEFAULT_TIERS(), autoTier: false, autoTierRules: [],
   scoreColorMode: "single", scoreColorSingle: "#FFC857", scoreGradientFrom: "#5FD9C0", scoreGradientTo: "#FF3D7F", scoreColorStops: [],
@@ -4188,6 +4188,8 @@ export default function KpopRanker() {
   const [listDropdownOpen, setListDropdownOpen] = useState(false);
   const [expandedAlbums, setExpandedAlbums] = useState({});
   const [expandedArtists, setExpandedArtists] = useState({});
+  const [artistImages, setArtistImages] = useState({});
+  const artistImageFetching = useRef(new Set());
 
   const [showImport, setShowImport] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -4792,6 +4794,52 @@ export default function KpopRanker() {
   }, [ranked, search, filterAwardsOnly]);
   const hasUnranked = useMemo(() => activeList.songs.some((s) => effectiveScore(activeList, s) == null), [activeList]);
 
+  useEffect(() => {
+    if (!activeList.autoArtistImages) return;
+    const uniqueArtists = Array.from(new Set((activeList.songs || []).map((s) => s.artist).filter(Boolean)));
+    uniqueArtists.forEach((artist) => {
+      if (artistImages[artist] || artistImageFetching.current.has(artist)) return;
+      const cacheKey = `artistImg:${artist.toLowerCase()}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        setArtistImages((prev) => ({ ...prev, [artist]: cached }));
+        return;
+      }
+      artistImageFetching.current.add(artist);
+      const saveImage = (url) => {
+        localStorage.setItem(cacheKey, url);
+        setArtistImages((prev) => ({ ...prev, [artist]: url }));
+      };
+      const fallbackToItunes = () => {
+        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=song&limit=1`)
+          .then((res) => res.json())
+          .then((data) => {
+            const art = data?.results?.[0]?.artworkUrl100;
+            if (art) saveImage(art.replace("100x100", "300x300"));
+          })
+          .catch(() => {})
+          .finally(() => artistImageFetching.current.delete(artist));
+      };
+      // Try Wikipedia first — usually a real group/artist photo rather than album art.
+      fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(artist.replace(/ /g, "_"))}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("not found");
+          return res.json();
+        })
+        .then((data) => {
+          if (data.type === "disambiguation") throw new Error("ambiguous");
+          const thumb = data?.thumbnail?.source;
+          if (thumb) {
+            saveImage(thumb);
+            artistImageFetching.current.delete(artist);
+          } else {
+            fallbackToItunes();
+          }
+        })
+        .catch(() => fallbackToItunes());
+    });
+  }, [activeList.autoArtistImages, activeList.songs, artistImages]);
+
   if (loading) return <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: MUTED, fontFamily: "Inter, sans-serif" }}>Loading…</div></div>;
 
   return (
@@ -5021,11 +5069,22 @@ export default function KpopRanker() {
                         onClick={() => (song.isLocked ? unlockRank(song.id) : lockAtCurrentRank(song.id, song.rank))} />
                       <input className="rank-input" style={{ color: rankColor }} type="number" min={1} value={song.rank} onChange={(e) => setManualRank(song.id, e.target.value)} />
                     </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {song.title}
+                    <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                      {activeList.autoArtistImages && (
+                        artistImages[song.artist] ? (
+                          <img src={artistImages[song.artist]} alt="" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `1px solid ${BORDER}` }} />
+                        ) : (
+                          <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: "#26223A", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: MUTED, fontWeight: 700 }}>
+                            {song.artist ? song.artist[0].toUpperCase() : "?"}
+                          </div>
+                        )
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {song.title}
+                        </div>
+                        <div style={{ fontSize: 12, color: theme.secondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</div>
                       </div>
-                      <div style={{ fontSize: 12, color: theme.secondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</div>
                     </div>
                     <span className="col-album" style={{ fontSize: 12.5, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {song.album || "—"}{song.year ? ` · ${song.year}` : ""}
@@ -5526,6 +5585,11 @@ export default function KpopRanker() {
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: MUTED, cursor: "pointer" }}><input type="checkbox" checked={activeList.showTier} onChange={(e) => updateActiveList({ showTier: e.target.checked })} /> Show tier</label>
           </div>
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 14 }}>Negative scores are allowed.</div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: MUTED, cursor: "pointer", marginBottom: 4 }}>
+            <input type="checkbox" checked={!!activeList.autoArtistImages} onChange={(e) => updateActiveList({ autoArtistImages: e.target.checked })} /> Show artist photos
+          </label>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 14 }}>Fetches a small artist photo next to each song from Wikipedia (falls back to iTunes artwork if no Wikipedia photo is found). Makes a network request per artist and caches results in your browser.</div>
 
           <div style={{ fontSize: 12, color: MUTED, fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Score color</div>
           <div className="mode-toggle" style={{ marginBottom: 12 }}>
