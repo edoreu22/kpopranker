@@ -4,6 +4,34 @@ import {
   StickyNote, Search, Lock, Award, FolderPlus, Disc3, Pencil, Check, Users, Wrench, UserCircle, Copy, GripVertical, List, LayoutGrid, ListChecks, Download,
 } from "lucide-react";
 
+// Storage shim: the app was originally built for Claude's artifact environment,
+// which provides window.storage.get/set backed by Anthropic's servers. Outside
+// that environment (e.g. deployed to GitHub Pages), window.storage doesn't
+// exist, so we polyfill the same interface using the browser's localStorage.
+// Note: localStorage is per-browser/device, not synced across devices like
+// the original Claude storage was.
+if (typeof window !== "undefined" && !window.storage) {
+  window.storage = {
+    async get(key) {
+      const raw = localStorage.getItem(key);
+      if (raw === null) throw new Error("not found");
+      return { key, value: raw };
+    },
+    async set(key, value) {
+      localStorage.setItem(key, value);
+      return { key, value };
+    },
+    async delete(key) {
+      localStorage.removeItem(key);
+      return { key, deleted: true };
+    },
+    async list(prefix = "") {
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith(prefix));
+      return { keys };
+    },
+  };
+}
+
 const DEFAULT_THEME = { accent: "#FF3D7F", secondary: "#B8A6FF", highlight: "#FFC857", background: "#14121F" };
 const CATALOG_LAST_UPDATED = "September 2, 2026";
 const APP_LAST_UPDATED = "September 2, 2026";
