@@ -4157,7 +4157,7 @@ function BgImg({ src }) {
 
 const DEFAULT_LIST = () => ({
   id: "default", name: "All Kpop Songs Ranked", tags: [], createdAt: Date.now(), songs: [],
-  scoreScale: 100, showScore: true, showTier: true, autoArtistImages: false,
+  scoreScale: 100, showScore: true, showTier: true, autoArtistImages: false, autoAlbumArt: false, artistImageDim: 60,
   advancedMode: false, advancedScoreMode: "sum", categories: DEFAULT_CATEGORIES(),
   tierNames: DEFAULT_TIERS(), autoTier: false, autoTierRules: [],
   scoreColorMode: "single", scoreColorSingle: "#FFC857", scoreGradientFrom: "#5FD9C0", scoreGradientTo: "#FF3D7F", scoreColorStops: [],
@@ -4190,6 +4190,8 @@ export default function KpopRanker() {
   const [expandedArtists, setExpandedArtists] = useState({});
   const [artistImages, setArtistImages] = useState({});
   const artistImageFetching = useRef(new Set());
+  const [albumArt, setAlbumArt] = useState({});
+  const albumArtFetching = useRef(new Set());
 
   const [showImport, setShowImport] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -4635,12 +4637,37 @@ export default function KpopRanker() {
       if (y && (!artistMap.get(a).year || y > artistMap.get(a).year)) artistMap.get(a).year = y;
     });
     const dir = sortBy === "asc" ? 1 : -1;
+    const alphaSort = sortBy === "az" || sortBy === "za";
+    const alphaDir = sortBy === "za" ? -1 : 1;
     return {
-      artists: Array.from(artistMap.values()).sort((x, y) => dir * ((x.year || 0) - (y.year || 0))).slice(0, 8),
-      albums: Array.from(albumMap.values()).sort((x, y) => dir * ((x.year || 0) - (y.year || 0))).slice(0, 12),
-      songs: [...matches].sort((x, y) => dir * ((x[3] || 0) - (y[3] || 0))).slice(0, 40),
+      artists: Array.from(artistMap.values()).sort((x, y) => (alphaSort ? alphaDir * x.artist.localeCompare(y.artist) : dir * ((x.year || 0) - (y.year || 0)))).slice(0, 8),
+      albums: Array.from(albumMap.values()).sort((x, y) => (alphaSort ? alphaDir * x.album.localeCompare(y.album) : dir * ((x.year || 0) - (y.year || 0)))).slice(0, 12),
+      songs: [...matches].sort((x, y) => (alphaSort ? alphaDir * x[0].localeCompare(y[0]) : dir * ((x[3] || 0) - (y[3] || 0)))).slice(0, 40),
     };
   }, [rankQuery, searchIn, sortBy]);
+
+  useEffect(() => {
+    if (!showRank) return;
+    catalogResults.albums.forEach((al) => ensureAlbumArt(al.artist, al.album));
+    catalogResults.artists.forEach((ar) => ensureArtistVisual(ar.artist));
+  }, [showRank, catalogResults]);
+
+  useEffect(() => {
+    if (!showAddConfirm) return;
+    addConfirmItems.forEach(([t, a, al]) => ensureAlbumArt(a, al || t));
+  }, [showAddConfirm, addConfirmItems]);
+
+  useEffect(() => {
+    if (!showReview || !reviewQueue.length) return;
+    const item = reviewQueue[reviewIndex];
+    if (reviewExisting) {
+      const currentSong = activeList.songs.find((s) => s.id === item);
+      if (currentSong) ensureAlbumArt(currentSong.artist, currentSong.album || currentSong.title);
+    } else if (item) {
+      const [title, artist, album] = item;
+      ensureAlbumArt(artist, album || title);
+    }
+  }, [showReview, reviewQueue, reviewIndex, reviewExisting, activeList.songs]);
 
   // Adding always routes through a confirm overlay (fast) or a step-through review (detailed)
   // instead of landing directly in the list. The search modal closes first so only one
@@ -4840,6 +4867,99 @@ export default function KpopRanker() {
     });
   }, [activeList.autoArtistImages, activeList.songs, artistImages]);
 
+  function ensureAlbumArt(artist, album) {
+    if (!artist) return;
+    const key = `${artist}|${album || ""}`.toLowerCase();
+    if (albumArt[key] || albumArtFetching.current.has(key)) return;
+    const cacheKey = `albumArt:${key}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      setAlbumArt((prev) => ({ ...prev, [key]: cached }));
+      return;
+    }
+    albumArtFetching.current.add(key);
+    const term = `${artist} ${album || ""}`.trim();
+    fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=1`)
+      .then((res) => res.json())
+      .then((data) => {
+        const art = data?.results?.[0]?.artworkUrl100;
+        if (art) {
+          const bigArt = art.replace("100x100", "600x600");
+          localStorage.setItem(cacheKey, bigArt);
+          setAlbumArt((prev) => ({ ...prev, [key]: bigArt }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => albumArtFetching.current.delete(key));
+  }
+
+  useEffect(() => {
+    if (!activeList.autoAlbumArt) return;
+    (activeList.songs || []).forEach((song) => {
+      if (song.bgImage) return;
+      ensureAlbumArt(song.artist, song.album || song.title);
+    });
+  }, [activeList.autoAlbumArt, activeList.songs, albumArt]);
+
+  function effectiveBg(song) {
+    if (song.bgImage) return song.bgImage;
+    if (!activeList.autoAlbumArt) return "";
+    const key = `${song.artist}|${song.album || song.title}`.toLowerCase();
+    return albumArt[key] || "";
+  }
+
+  // Artist visual chain for search results: logo -> group/artist photo -> most recent album art
+  const [artistVisuals, setArtistVisuals] = useState({});
+  const artistVisualFetching = useRef(new Set());
+  function ensureArtistVisual(artist) {
+    if (!artist || artistVisuals[artist] || artistVisualFetching.current.has(artist)) return;
+    const cacheKey = `artistVisual:${artist.toLowerCase()}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try { setArtistVisuals((prev) => ({ ...prev, [artist]: JSON.parse(cached) })); return; } catch (e) {}
+    }
+    artistVisualFetching.current.add(artist);
+    const save = (visual) => {
+      localStorage.setItem(cacheKey, JSON.stringify(visual));
+      setArtistVisuals((prev) => ({ ...prev, [artist]: visual }));
+      artistVisualFetching.current.delete(artist);
+    };
+    const tryLatestAlbumArt = () => {
+      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=album&limit=8&attribute=artistTerm`)
+        .then((res) => res.json())
+        .then((data) => {
+          const results = data?.results || [];
+          if (!results.length) { artistVisualFetching.current.delete(artist); return; }
+          const latest = results.reduce((best, r) => (!best || (r.releaseDate || "") > (best.releaseDate || "") ? r : best), null);
+          const art = latest?.artworkUrl100;
+          if (art) save({ type: "album", url: art.replace("100x100", "300x300") });
+          else artistVisualFetching.current.delete(artist);
+        })
+        .catch(() => artistVisualFetching.current.delete(artist));
+    };
+    const tryWikipediaPhoto = () => {
+      fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(artist.replace(/ /g, "_"))}`)
+        .then((res) => { if (!res.ok) throw new Error("not found"); return res.json(); })
+        .then((data) => {
+          if (data.type === "disambiguation") throw new Error("ambiguous");
+          const thumb = data?.thumbnail?.source;
+          if (thumb) save({ type: "photo", url: thumb });
+          else tryLatestAlbumArt();
+        })
+        .catch(() => tryLatestAlbumArt());
+    };
+    // TheAudioDB: try artist logo first, then their photo, before falling back further.
+    fetch(`https://www.theaudiodb.com/api/v1/json/123/search.php?s=${encodeURIComponent(artist)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const a = data?.artists?.[0];
+        if (a?.strArtistLogo) { save({ type: "logo", url: a.strArtistLogo }); return; }
+        if (a?.strArtistThumb) { save({ type: "photo", url: a.strArtistThumb }); return; }
+        tryWikipediaPhoto();
+      })
+      .catch(() => tryWikipediaPhoto());
+  }
+
   if (loading) return <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: MUTED, fontFamily: "Inter, sans-serif" }}>Loading…</div></div>;
 
   return (
@@ -4884,6 +5004,22 @@ export default function KpopRanker() {
         .kp-row-bg { position: absolute; inset: 0; border-radius: 10px; overflow: hidden; z-index: 0; }
         .kp-row-bg img { width: 100%; height: 100%; object-fit: cover; }
         .kp-row-bg .dim { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
+        .artist-fade-bg {
+          position: absolute; top: 0; bottom: 0; left: 0; width: 260px; z-index: 0; border-radius: 10px 0 0 10px;
+          background-size: cover; background-position: center;
+          -webkit-mask-image: linear-gradient(to right, black 0%, black 35%, transparent 92%);
+          mask-image: linear-gradient(to right, black 0%, black 35%, transparent 92%);
+        }
+        @media (max-width: 760px) {
+          .artist-fade-bg { width: 150px; }
+        }
+        .art-fade-right {
+          position: absolute; top: 0; bottom: 0; right: 0; width: 170px; z-index: 0; border-radius: 8px;
+          background-size: cover; background-position: center;
+          -webkit-mask-image: linear-gradient(to left, black 0%, black 35%, transparent 92%);
+          mask-image: linear-gradient(to left, black 0%, black 35%, transparent 92%);
+        }
+        .art-fade-right-sm { width: 100px; }
         .kp-row { position: relative; z-index: 1; display: grid; grid-template-columns: 44px 1.4fr 1fr 46px 56px minmax(60px, auto) 26px 30px; gap: 8px; align-items: center; }
         @media (max-width: 760px) {
           .kp-row { grid-template-columns: 34px 1fr 40px 50px minmax(44px, auto) 22px 22px; }
@@ -5028,7 +5164,7 @@ export default function KpopRanker() {
               const rankColor = song.rank === 1 ? GOLD : song.rank === 2 ? SILVER : song.rank === 3 ? BRONZE : theme.highlight;
               return (
                 <div key={song.id} className="gallery-card" style={{ width: dims.width }} onClick={() => jumpToSong(song.id)}>
-                  <BgImg src={song.bgImage} />
+                  <BgImg src={effectiveBg(song)} />
                   <div className="gallery-dim" />
                   <div className="gallery-artist" style={{ color: theme.secondary, fontSize: dims.artist }}>{song.artist}</div>
                   <div className="gallery-title" style={{ color: TEXT, fontSize: dims.title }}>{song.title}</div>
@@ -5062,29 +5198,21 @@ export default function KpopRanker() {
                 : undefined;
               return (
                 <div key={song.id} id={`song-row-${song.id}`} className="kp-row-wrap" style={{ background: song.bgImage ? "transparent" : idx % 2 === 0 ? CARD : ROW_ALT }}>
-                  {song.bgImage && <div className="kp-row-bg"><BgImg src={song.bgImage} /><div className="dim" /></div>}
+                  {effectiveBg(song) && <div className="kp-row-bg"><BgImg src={effectiveBg(song)} /><div className="dim" /></div>}
+                  {!effectiveBg(song) && activeList.autoArtistImages && artistImages[song.artist] && (
+                    <div className="artist-fade-bg" style={{ backgroundImage: `linear-gradient(rgba(0,0,0,${(activeList.artistImageDim ?? 60) / 100}), rgba(0,0,0,${(activeList.artistImageDim ?? 60) / 100})), url(${artistImages[song.artist]})` }} />
+                  )}
                   <div className="kp-row" style={{ padding: "12px 14px" }}>
                     <div className="rank-cell">
                       <Lock size={11} color={rankColor} className={`rank-lock-toggle ${song.isLocked ? "locked" : "reveal"}`}
                         onClick={() => (song.isLocked ? unlockRank(song.id) : lockAtCurrentRank(song.id, song.rank))} />
                       <input className="rank-input" style={{ color: rankColor }} type="number" min={1} value={song.rank} onChange={(e) => setManualRank(song.id, e.target.value)} />
                     </div>
-                    <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                      {activeList.autoArtistImages && (
-                        artistImages[song.artist] ? (
-                          <img src={artistImages[song.artist]} alt="" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: `1px solid ${BORDER}` }} />
-                        ) : (
-                          <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: "#26223A", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: MUTED, fontWeight: 700 }}>
-                            {song.artist ? song.artist[0].toUpperCase() : "?"}
-                          </div>
-                        )
-                      )}
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {song.title}
-                        </div>
-                        <div style={{ fontSize: 12, color: theme.secondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {song.title}
                       </div>
+                      <div style={{ fontSize: 12, color: theme.secondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</div>
                     </div>
                     <span className="col-album" style={{ fontSize: 12.5, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {song.album || "—"}{song.year ? ` · ${song.year}` : ""}
@@ -5271,6 +5399,7 @@ export default function KpopRanker() {
               <span style={{ fontSize: 11.5, color: MUTED }}>Sort by</span>
               <select className="kp-input" style={{ width: "auto", padding: "6px 10px", fontSize: 12.5 }} value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
                 <option value="desc">Release Date ↓</option><option value="asc">Release Date ↑</option>
+                <option value="az">Alphabetically A-Z</option><option value="za">Alphabetically Z-A</option>
               </select>
             </div>
           </div>
@@ -5290,7 +5419,15 @@ export default function KpopRanker() {
                         <div className="result-row">
                           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                             <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => setExpandedArtists({ ...expandedArtists, [ar.artist]: !isOpen })}>{isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
-                            <Users size={16} color={MUTED} />
+                            {artistVisuals[ar.artist] ? (
+                              artistVisuals[ar.artist].type === "logo" ? (
+                                <img src={artistVisuals[ar.artist].url} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: "contain", background: "#26223A", padding: 3, flexShrink: 0 }} />
+                              ) : (
+                                <img src={artistVisuals[ar.artist].url} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                              )
+                            ) : (
+                              <Users size={16} color={MUTED} />
+                            )}
                             <div style={{ fontWeight: 700, fontSize: 13.5 }}>{ar.artist} <span style={{ color: MUTED, fontWeight: 400, fontSize: 11.5 }}>· {ar.songs.length} songs</span></div>
                           </div>
                           <button className="kp-btn-bright" disabled={newCount === 0} onClick={() => triggerAdd(ar.songs, `Artist: ${ar.artist}`)}>{newCount === 0 ? "All added" : `+ Add all ${newCount}`}</button>
@@ -5325,7 +5462,11 @@ export default function KpopRanker() {
                         <div className="result-row">
                           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                             <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => setExpandedAlbums({ ...expandedAlbums, [`${al.album}|${al.artist}`]: !isOpen })}>{isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
-                            <Disc3 size={16} color={MUTED} />
+                            {albumArt[`${al.artist}|${al.album}`.toLowerCase()] ? (
+                              <img src={albumArt[`${al.artist}|${al.album}`.toLowerCase()]} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                            ) : (
+                              <Disc3 size={16} color={MUTED} />
+                            )}
                             <div style={{ minWidth: 0 }}>
                               <div style={{ fontWeight: 700, fontSize: 13.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{al.album}</div>
                               <div style={{ fontSize: 11.5, color: theme.secondary }}>{al.artist} · {al.songs.length} songs{al.year ? ` · ${al.year}` : ""}</div>
@@ -5383,22 +5524,35 @@ export default function KpopRanker() {
       {/* Add-confirm overlay (fast mode) */}
       {showAddConfirm && (
         <Modal title={addConfirmItems.length === 1 ? "Add this song?" : `Add ${addConfirmItems.length} songs`} onClose={() => setShowAddConfirm(false)} wide={addConfirmItems.length > 1}>
-          {addConfirmItems.length === 1 ? (
-            <div style={{ marginBottom: 18 }}>
-              <div className="display" style={{ fontSize: 24, color: TEXT }}>{addConfirmItems[0][0]}</div>
-              <div style={{ fontSize: 13, color: theme.secondary, fontWeight: 600 }}>{addConfirmItems[0][1]}</div>
-              <div style={{ fontSize: 12, color: MUTED }}>{addConfirmItems[0][2]}{addConfirmItems[0][3] ? ` · ${addConfirmItems[0][3]}` : ""}</div>
-            </div>
-          ) : (
+          {addConfirmItems.length === 1 ? (() => {
+            const [t0, a0, al0, y0] = addConfirmItems[0];
+            const artKey = `${a0}|${al0 || t0}`.toLowerCase();
+            const art = albumArt[artKey];
+            return (
+              <div style={{ position: "relative", marginBottom: 18, borderRadius: 8, overflow: "hidden" }}>
+                {art && <div className="art-fade-right" style={{ backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${art})` }} />}
+                <div style={{ position: "relative", zIndex: 1, padding: art ? "8px 10px" : 0 }}>
+                  <div className="display" style={{ fontSize: 24, color: TEXT }}>{t0}</div>
+                  <div style={{ fontSize: 13, color: theme.secondary, fontWeight: 600 }}>{a0}</div>
+                  <div style={{ fontSize: 12, color: MUTED }}>{al0}{y0 ? ` · ${y0}` : ""}</div>
+                </div>
+              </div>
+            );
+          })() : (
             <div style={{ maxHeight: 300, overflowY: "auto", marginBottom: 14 }}>
               {addConfirmItems.map(([t, a, al, y], i) => {
                 const key = `${t}|${a}`;
+                const artKey = `${a}|${al || t}`.toLowerCase();
+                const art = albumArt[artKey];
                 return (
                   <label key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: `1px solid ${BORDER}`, cursor: "pointer" }}>
                     <input type="checkbox" checked={!!addConfirmChecked[key]} onChange={(e) => setAddConfirmChecked({ ...addConfirmChecked, [key]: e.target.checked })} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{t}</div>
-                      <div style={{ fontSize: 11, color: MUTED }}>{a} · {al}{y ? ` · ${y}` : ""}</div>
+                    <div style={{ position: "relative", minWidth: 0, flex: 1, borderRadius: 6, overflow: "hidden" }}>
+                      {art && <div className="art-fade-right art-fade-right-sm" style={{ backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${art})` }} />}
+                      <div style={{ position: "relative", zIndex: 1, padding: art ? "4px 6px" : 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{t}</div>
+                        <div style={{ fontSize: 11, color: MUTED }}>{a} · {al}{y ? ` · ${y}` : ""}</div>
+                      </div>
                     </div>
                   </label>
                 );
@@ -5445,10 +5599,19 @@ export default function KpopRanker() {
             ) : (
               <div className="display" style={{ fontSize: 24, color: TEXT }}>{title}</div>
             )}
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: theme.secondary, fontWeight: 600 }}>{artist}</div>
-              <div style={{ fontSize: 12, color: MUTED }}>{album}{year ? ` · ${year}` : ""}</div>
-            </div>
+            {(() => {
+              const artKey = `${artist}|${album || title}`.toLowerCase();
+              const art = albumArt[artKey];
+              return (
+                <div style={{ position: "relative", marginBottom: 16, borderRadius: 8, overflow: "hidden" }}>
+                  {art && <div className="art-fade-right" style={{ backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${art})` }} />}
+                  <div style={{ position: "relative", zIndex: 1, padding: art ? "8px 10px" : 0 }}>
+                    <div style={{ fontSize: 13, color: theme.secondary, fontWeight: 600 }}>{artist}</div>
+                    <div style={{ fontSize: 12, color: MUTED }}>{album}{year ? ` · ${year}` : ""}</div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {activeList.advancedMode ? (
               <div style={{ marginBottom: 14 }}>
@@ -5590,6 +5753,19 @@ export default function KpopRanker() {
             <input type="checkbox" checked={!!activeList.autoArtistImages} onChange={(e) => updateActiveList({ autoArtistImages: e.target.checked })} /> Show artist photos
           </label>
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 14 }}>Fetches a small artist photo next to each song from Wikipedia (falls back to iTunes artwork if no Wikipedia photo is found). Makes a network request per artist and caches results in your browser.</div>
+
+          {activeList.autoArtistImages && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <span style={{ fontSize: 11.5, color: MUTED }}>Photo dimming</span>
+              <input type="range" min={40} max={80} step={5} value={activeList.artistImageDim ?? 60} onChange={(e) => updateActiveList({ artistImageDim: Number(e.target.value) })} style={{ flex: 1 }} />
+              <span style={{ fontSize: 11.5, color: MUTED, width: 36, textAlign: "right" }}>{activeList.artistImageDim ?? 60}%</span>
+            </div>
+          )}
+
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: MUTED, cursor: "pointer", marginBottom: 4 }}>
+            <input type="checkbox" checked={!!activeList.autoAlbumArt} onChange={(e) => updateActiveList({ autoAlbumArt: e.target.checked })} /> Show album art as background
+          </label>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 14 }}>Auto-fills each song's row/gallery background with its album artwork from iTunes, but only for songs without a background image you've already set manually. One network request per unique album, cached in your browser.</div>
 
           <div style={{ fontSize: 12, color: MUTED, fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Score color</div>
           <div className="mode-toggle" style={{ marginBottom: 12 }}>
