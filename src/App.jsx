@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { shareList, fetchSharedList } from "./supabaseClient";
 import {
   Plus, X, Music, ChevronDown, ChevronUp, Trash2, Settings, RotateCcw,
   StickyNote, Search, Lock, Award, FolderPlus, Disc3, Pencil, Check, Users, Wrench, UserCircle, Copy, GripVertical, List, LayoutGrid, ListChecks, Download,
@@ -6038,6 +6039,53 @@ export default function KpopRanker() {
   const [avatarBroken, setAvatarBroken] = useState(false);
 
   const [lists, setLists] = useState([]);
+  const [sharedView, setSharedView] = useState(null); // { list } when viewing someone else's shared link
+  const [sharedViewStatus, setSharedViewStatus] = useState("idle"); // idle | loading | notfound
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareLink, setShareLink] = useState("");
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareError, setShareError] = useState("");
+  const [shareCopied, setShareCopied] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const shareId = params.get("share");
+    if (!shareId) return;
+    setSharedViewStatus("loading");
+    fetchSharedList(shareId)
+      .then((list) => {
+        if (list) { setSharedView({ list }); setSharedViewStatus("idle"); }
+        else setSharedViewStatus("notfound");
+      })
+      .catch(() => setSharedViewStatus("notfound"));
+  }, []);
+
+  async function handleShareList() {
+    setShareLoading(true);
+    setShareError("");
+    try {
+      const id = await shareList(activeList);
+      const link = `${window.location.origin}${window.location.pathname}?share=${id}`;
+      setShareLink(link);
+    } catch (e) {
+      setShareError("Couldn't create the share link — try again.");
+    }
+    setShareLoading(false);
+  }
+
+  function importSharedList() {
+    if (!sharedView?.list) return;
+    const id = `list-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const imported = { ...sharedView.list, id, name: `${sharedView.list.name} (shared)`, createdAt: Date.now() };
+    const updated = [...lists, imported];
+    setLists(updated);
+    window.storage.set("kpop-lists", JSON.stringify(updated), true).catch(() => {});
+    setActiveListId(id);
+    setSharedView(null);
+    window.history.replaceState({}, "", window.location.pathname);
+  }
+
+
   const [activeListId, setActiveListId] = useState(null);
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [rankMode, setRankMode] = useState("detailed");
@@ -6874,6 +6922,47 @@ export default function KpopRanker() {
 
   if (loading) return <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: MUTED, fontFamily: "Inter, sans-serif" }}>Loading…</div></div>;
 
+  if (sharedViewStatus === "loading") {
+    return <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: MUTED, fontFamily: "Inter, sans-serif" }}>Loading shared list…</div></div>;
+  }
+  if (sharedViewStatus === "notfound") {
+    return (
+      <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, fontFamily: "Inter, sans-serif", padding: 20, textAlign: "center" }}>
+        <div style={{ color: TEXT, fontSize: 16, fontWeight: 700 }}>This link has expired or doesn't exist</div>
+        <div style={{ color: MUTED, fontSize: 13 }}>Shared list links expire automatically after 30 days.</div>
+        <button className="kp-btn" style={{ background: theme.accent, marginTop: 8 }} onClick={() => { setSharedViewStatus("idle"); window.history.replaceState({}, "", window.location.pathname); }}>Go to my lists</button>
+      </div>
+    );
+  }
+  if (sharedView) {
+    const preview = computeRanks(sharedView.list).sort((a, b) => a.rank - b.rank);
+    return (
+      <div style={{ background: theme.background, minHeight: "100vh", fontFamily: "'Inter', sans-serif", color: TEXT, padding: "24px 16px" }}>
+        <div style={{ maxWidth: 640, margin: "0 auto" }}>
+          <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Shared list</div>
+          <div className="display" style={{ fontSize: 28, marginBottom: 4 }}>{sharedView.list.name}</div>
+          <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 18 }}>{preview.length} song{preview.length === 1 ? "" : "s"} · view only until you import it</div>
+          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <button className="kp-btn" style={{ background: theme.accent }} onClick={importSharedList}>Import to my lists</button>
+            <button className="kp-btn-ghost" onClick={() => { setSharedView(null); window.history.replaceState({}, "", window.location.pathname); }}>Not now</button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {preview.map((song) => (
+              <div key={song.id} style={{ display: "flex", alignItems: "center", gap: 12, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 14px" }}>
+                <div style={{ width: 28, textAlign: "center", fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: theme.highlight }}>{song.rank}</div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.title}</div>
+                  <div style={{ fontSize: 12, color: theme.secondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</div>
+                </div>
+                {song._score != null && <div style={{ fontSize: 13, color: MUTED, fontWeight: 600 }}>{song._score}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: theme.background, minHeight: "100vh", fontFamily: "'Inter', sans-serif", color: TEXT }}>
       <style>{`
@@ -7340,6 +7429,31 @@ export default function KpopRanker() {
       )}
 
       {/* Import List modal */}
+      {showShareModal && (
+        <Modal title="Share list" onClose={() => setShowShareModal(false)}>
+          <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
+            Creates a view-only snapshot of "{activeList.name}" as it is right now. Anyone with the link can view it and import their own copy. The link expires automatically after 30 days.
+          </div>
+          {!shareLink ? (
+            <button className="kp-btn" style={{ background: theme.accent }} disabled={shareLoading} onClick={handleShareList}>
+              {shareLoading ? "Creating link…" : "Create share link"}
+            </button>
+          ) : (
+            <div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <input className="kp-input" readOnly value={shareLink} onFocus={(e) => e.target.select()} style={{ fontSize: 12.5 }} />
+                <button className="kp-btn-ghost" style={{ whiteSpace: "nowrap" }}
+                  onClick={() => { navigator.clipboard.writeText(shareLink).then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 2000); }); }}>
+                  {shareCopied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              <div style={{ fontSize: 11.5, color: MUTED }}>This snapshot won't update if you keep editing the list — create a new link any time to share the latest version.</div>
+            </div>
+          )}
+          {shareError && <div style={{ color: theme.accent, fontSize: 12.5, marginTop: 10 }}>{shareError}</div>}
+        </Modal>
+      )}
+
       {showImport && (
         <Modal title="Import list" onClose={() => setShowImport(false)} wide>
           <label className="kp-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 12, cursor: "pointer" }}>
@@ -7847,6 +7961,7 @@ export default function KpopRanker() {
               <button className="kp-btn-ghost" onClick={duplicateList}><Copy size={13} /> Duplicate this list</button>
               <button className="kp-btn-ghost" onClick={() => exportList("json")}><Download size={13} /> Export .json</button>
               <button className="kp-btn-ghost" onClick={() => exportList("txt")}><Download size={13} /> Export .txt</button>
+              <button className="kp-btn-ghost" onClick={() => { setShowShareModal(true); setShareLink(""); setShareError(""); setShareCopied(false); }}>Share list</button>
             </div>
             {confirmDeleteList ? (
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
