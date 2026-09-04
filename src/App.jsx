@@ -6217,12 +6217,15 @@ function computeAlbumRanks(list) {
   return result;
 }
 
-function Modal({ title, onClose, children, wide, zIndex }) {
+function Modal({ title, titleExtra, onClose, children, wide, zIndex }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: zIndex || 100, padding: 16 }} onClick={onClose}>
       <div style={{ background: CARD, borderRadius: 14, padding: 22, width: wide ? 620 : 440, maxWidth: "100%", maxHeight: "85vh", overflowY: "auto", border: `1px solid ${BORDER}` }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div className="display" style={{ fontSize: 22, color: TEXT }}>{title}</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+            <div className="display" style={{ fontSize: 22, color: TEXT }}>{title}</div>
+            {titleExtra}
+          </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: MUTED, cursor: "pointer" }}><X size={20} /></button>
         </div>
         {children}
@@ -6584,7 +6587,7 @@ export default function KpopRanker() {
   }
 
   function addSong() {
-    if (newIsAlbum) {
+    if (newIsAlbum || activeList.listType === "albums-only") {
       if (!newArtist.trim() || !newAlbum.trim()) return;
       const validRows = albumSongRows.filter((r) => r.title.trim());
       if (!validRows.length) return;
@@ -6977,21 +6980,28 @@ export default function KpopRanker() {
       addedCountRef.current += 1;
       const songTitle = activeList.songs.find((s) => s.id === songId)?.title || "song";
       showToast(addedCountRef.current === 1 ? `Ranked "${songTitle}"` : `Ranked ${addedCountRef.current} songs`);
-    } else if (reviewAlbumGroup) {
+    } else if (!Array.isArray(reviewQueue[reviewIndex])) {
       const group = reviewQueue[reviewIndex];
       const newSongs = group.items.map(([title, artist, album, year]) => makeSongObj({ title, artist, album, year }));
-      updateActiveSongs((songs) => [...newSongs, ...songs]);
-      recordAdd(`${group.album} — ${group.artist}`, newSongs.map((s) => s.id));
-      if (!unranked) {
-        setAlbumOverride(group.key, {
+      const currentOverrides = activeList.albumOverrides || {};
+      const overridePatch = unranked ? currentOverrides : {
+        ...currentOverrides,
+        [group.key]: {
+          ...(currentOverrides[group.key] || {}),
           score: reviewDraft.score === "" ? null : Math.min(scoreScale, Number(reviewDraft.score)),
           tier: reviewDraft.tier || "",
           tierLocked: !!reviewDraft.tier,
           awards: reviewDraft.awardEmoji ? [{ emoji: reviewDraft.awardEmoji, label: reviewDraft.awardLabel || "", highlighted: false }] : [],
           notes: reviewDraft.note.trim() && username ? [{ author: username, text: reviewDraft.note.trim(), ts: Date.now() }] : [],
           bgImage: reviewDraft.bgImage || "",
-        });
-      }
+        },
+      };
+      // Both changes (adding the songs and setting the album's override) are combined
+      // into one saveLists call — doing them as two separate calls back-to-back would
+      // have each read the same pre-update snapshot of the list, so the second call
+      // would silently overwrite the first.
+      saveLists(lists.map((l) => (l.id === activeListId ? { ...l, songs: [...newSongs, ...l.songs], albumOverrides: overridePatch } : l)));
+      recordAdd(`${group.album} — ${group.artist}`, newSongs.map((s) => s.id));
       addedCountRef.current += 1;
       showToast(addedCountRef.current === 1 ? `Added album "${group.album}"` : `Added ${addedCountRef.current} albums`);
     } else {
@@ -7013,7 +7023,7 @@ export default function KpopRanker() {
   }
   function reviewSkip() {
     const item = reviewQueue[reviewIndex];
-    const title = reviewExisting ? (activeList.songs.find((s) => s.id === item)?.title) : (reviewAlbumGroup ? item?.album : item?.[0]);
+    const title = reviewExisting ? (activeList.songs.find((s) => s.id === item)?.title) : (!Array.isArray(item) ? item?.album : item?.[0]);
     if (title) showToast(`Skipped "${title}"`);
     advanceReview();
   }
@@ -8068,6 +8078,9 @@ export default function KpopRanker() {
 
       {showImport && (
         <Modal title="Import list" onClose={() => setShowImport(false)} wide>
+          {activeList.listType === "albums-only" && (
+            <div style={{ fontSize: 11.5, color: theme.secondary, marginBottom: 12, fontWeight: 600 }}>This is an Albums Only list — imported songs will automatically be grouped and ranked by album.</div>
+          )}
           <label className="kp-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 12, cursor: "pointer" }}>
             <Download size={13} style={{ transform: "rotate(180deg)" }} /> Upload .txt, .json, or .xlsx file
             <input type="file" accept=".txt,.json,.xlsx,.xls,text/plain,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style={{ display: "none" }} onChange={handleImportFile} />
@@ -8086,10 +8099,14 @@ export default function KpopRanker() {
       {/* Add Song modal */}
       {showAdd && (
         <Modal title="Add a song" onClose={() => setShowAdd(false)}>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: MUTED, cursor: "pointer", marginBottom: 12 }}>
-            <input type="checkbox" checked={newIsAlbum} onChange={(e) => setNewIsAlbum(e.target.checked)} /> Add as a whole album instead of a single song
-          </label>
-          {newIsAlbum ? (
+          {activeList.listType === "albums-only" ? (
+            <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 12 }}>This is an Albums Only list, so every entry is added as an album.</div>
+          ) : (
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: MUTED, cursor: "pointer", marginBottom: 12 }}>
+              <input type="checkbox" checked={newIsAlbum} onChange={(e) => setNewIsAlbum(e.target.checked)} /> Add as a whole album instead of a single song
+            </label>
+          )}
+          {(newIsAlbum || activeList.listType === "albums-only") ? (
             <>
               <div className="kp-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
                 <input className="kp-input" placeholder="Artist / group" value={newArtist} onChange={(e) => setNewArtist(e.target.value)} />
@@ -8156,18 +8173,22 @@ export default function KpopRanker() {
       )}
 
       {showRank && (
-        <Modal title="Search to rank" onClose={() => setShowRank(false)} wide>
-          <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
+        <Modal title="Search to rank" wide onClose={() => setShowRank(false)}
+          titleExtra={queueMode && (
+            <button onClick={() => setShowQueuePopup(true)} style={{ background: "none", border: "none", color: theme.secondary, fontSize: 12, fontStyle: "italic", cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}>
+              View queue {pendingQueueItems.length > 0 ? `(${pendingQueueItems.length})` : ""}
+            </button>
+          )}>
+          <div style={{ display: "flex", gap: 8, marginBottom: queueMode ? 10 : 4 }}>
             <input className="kp-input" placeholder="Search song, artist, or album…" value={rankQuery} onChange={(e) => setRankQuery(e.target.value)} style={{ flex: 1 }} autoFocus />
             <button className={`icon-btn icon-btn-tall ${queueMode ? "active" : ""}`} style={queueMode ? { color: theme.accent, borderColor: theme.accent } : {}} title="Queue mode — stage songs and rank them all at once" onClick={() => setQueueMode(!queueMode)}><Layers size={15} /></button>
           </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-            {queueMode && (
-              <button onClick={() => setShowQueuePopup(true)} style={{ background: "none", border: "none", color: theme.secondary, fontSize: 12, fontStyle: "italic", cursor: "pointer", padding: 0 }}>
-                View queue {pendingQueueItems.length > 0 ? `(${pendingQueueItems.length})` : ""}
-              </button>
-            )}
-          </div>
+          {queueMode && (
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+              <button className="kp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12 }} disabled={!pendingQueueItems.length} onClick={startQueueRanking}>Start Queue {pendingQueueItems.length > 0 ? `(${pendingQueueItems.length})` : ""}</button>
+              <button className="kp-btn-ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setQueueMode(false)}>Close out</button>
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
             <div style={{ display: "flex", gap: 14 }}>
               {[["song", "Song"], ["artist", "Artist"], ["album", "Album"]].map(([key, label]) => (
@@ -8217,7 +8238,7 @@ export default function KpopRanker() {
                             </div>
                             <div style={{ fontWeight: 700, fontSize: 13.5 }}>{ar.artist} <span style={{ color: MUTED, fontWeight: 400, fontSize: 11.5 }}>· {ar.songs.length} songs</span></div>
                           </div>
-                          <button className="kp-btn-bright" disabled={newCount === 0} onClick={(e) => { e.stopPropagation(); triggerAdd(ar.songs, `Artist: ${ar.artist}`); }}>{newCount === 0 ? "All added" : `+ Add all ${newCount}`}</button>
+                          <button className="kp-btn-bright" disabled={newCount === 0} onClick={(e) => { e.stopPropagation(); triggerAdd(ar.songs, `Artist: ${ar.artist}`); }}>{newCount === 0 ? "All added" : (isAlbumView ? "Add All" : `+ Add all ${newCount}`)}</button>
                         </div>
                         {editingArtistPhoto === ar.artist && (
                           <div style={{ display: "flex", gap: 6, padding: "0 0 10px 42px" }}>
@@ -8273,7 +8294,7 @@ export default function KpopRanker() {
                               <div style={{ fontSize: 11.5, color: theme.secondary }}>{al.artist} · {al.songs.length} songs{al.year ? ` · ${al.year}` : ""}</div>
                             </div>
                           </div>
-                          <button className="kp-btn-bright" disabled={newCount === 0} onClick={(e) => { e.stopPropagation(); triggerAdd(al.songs, `Album: ${al.album}`); }}>{newCount === 0 ? "All added" : `+ Add ${newCount}`}</button>
+                          <button className="kp-btn-bright" disabled={newCount === 0} onClick={(e) => { e.stopPropagation(); triggerAdd(al.songs, `Album: ${al.album}`); }}>{newCount === 0 ? "All added" : (isAlbumView ? "Add Album" : `+ Add ${newCount}`)}</button>
                         </div>
                         {isOpen && (
                           <div style={{ paddingLeft: 30 }}>
@@ -8386,26 +8407,27 @@ export default function KpopRanker() {
       {showReview && reviewQueue.length > 0 && (() => {
         const currentSong = reviewExisting ? activeList.songs.find((s) => s.id === reviewQueue[reviewIndex]) : null;
         if (reviewExisting && !currentSong) { advanceReview(); return null; }
-        const currentGroup = reviewAlbumGroup ? reviewQueue[reviewIndex] : null;
+        const isGroupItem = !reviewExisting && !Array.isArray(reviewQueue[reviewIndex]);
+        const currentGroup = isGroupItem ? reviewQueue[reviewIndex] : null;
         const [title, artist, album, year] = reviewExisting
           ? [currentSong.title, currentSong.artist, currentSong.album, currentSong.year]
-          : reviewAlbumGroup
+          : isGroupItem
             ? [currentGroup.album, currentGroup.artist, currentGroup.album, currentGroup.year]
             : reviewQueue[reviewIndex];
         const isLast = reviewIndex + 1 >= reviewQueue.length;
         return (
-          <Modal title={reviewAlbumGroup ? `Album ${reviewIndex + 1} of ${reviewQueue.length}` : `Track ${reviewIndex + 1} of ${reviewQueue.length}`} onClose={() => { setShowReview(false); setReviewQueue([]); setReviewExisting(false); }}>
+          <Modal title={isGroupItem ? `Album ${reviewIndex + 1} of ${reviewQueue.length}` : `Track ${reviewIndex + 1} of ${reviewQueue.length}`} onClose={() => { setShowReview(false); setReviewQueue([]); setReviewExisting(false); }}>
             {reviewQueue.length > 1 ? (
               <select className="review-title-select" value={reviewIndex} onChange={(e) => jumpReviewTo(Number(e.target.value))}>
                 {reviewQueue.map((item, i) => {
-                  const t = reviewExisting ? activeList.songs.find((s) => s.id === item)?.title || "Untitled" : (reviewAlbumGroup ? item.album : item[0]);
+                  const t = reviewExisting ? activeList.songs.find((s) => s.id === item)?.title || "Untitled" : (!Array.isArray(item) ? item.album : item[0]);
                   return <option key={i} value={i}>{t}</option>;
                 })}
               </select>
             ) : (
               <div className="display" style={{ fontSize: 24, color: TEXT }}>{title}</div>
             )}
-            {reviewAlbumGroup && (
+            {isGroupItem && (
               <div style={{ fontSize: 11.5, color: MUTED, marginTop: -8, marginBottom: 10 }}>{currentGroup.items.length} song{currentGroup.items.length === 1 ? "" : "s"} will be added — the score, tier, award, and note below apply to the album as a whole.</div>
             )}
             {(() => {
@@ -8449,14 +8471,17 @@ export default function KpopRanker() {
             </div>
             <input className="kp-input" placeholder="Note — optional" value={reviewDraft.note} onChange={(e) => setReviewDraft({ ...reviewDraft, note: e.target.value })} style={{ marginBottom: 18 }} />
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button className="kp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={reviewSkip}>Skip</button>
                 {reviewQueue.length > 1 && <button className="kp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={skipRestOfReview}>Skip rest</button>}
                 {!reviewExisting && <button className="kp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => reviewCommit(true)}>Add to list unranked</button>}
-                <button className="kp-btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => { setShowReview(false); setReviewQueue([]); setReviewIndex(0); setReviewExisting(false); }}>Done</button>
               </div>
-              <button className="kp-btn" style={{ padding: "7px 12px", fontSize: 12.5, alignSelf: "flex-end" }} onClick={() => reviewCommit(false)}>{isLast ? (reviewExisting ? "Save & Finish" : "Add & Finish") : (reviewExisting ? "Save & Next" : "Add & Next")}</button>
+              <div style={{ borderTop: `1px solid ${BORDER}` }} />
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button className="kp-btn-ghost" style={{ padding: "7px 12px", fontSize: 12.5 }} onClick={() => { setShowReview(false); setReviewQueue([]); setReviewIndex(0); setReviewExisting(false); }}>Done</button>
+                <button className="kp-btn" style={{ padding: "7px 12px", fontSize: 12.5 }} onClick={() => reviewCommit(false)}>{isLast ? (reviewExisting ? "Save & Finish" : "Add & Finish") : (reviewExisting ? "Save & Next" : "Add & Next")}</button>
+              </div>
             </div>
           </Modal>
         );
