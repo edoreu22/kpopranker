@@ -1100,7 +1100,15 @@ const SEED_SONGS = [
   ["Amnesia", "ENHYPEN", "ROMANCE : UNTOLD", 2024],
   ["First Love", "ENHYPEN", "ROMANCE : UNTOLD", 2024],
   ["Blessed-Cursed (Remix)", "ENHYPEN", "ROMANCE : UNTOLD", 2024],
-  ["Fatal Trouble", "ENHYPEN", "ROMANCE : UNTOLD", 2024],
+  ["One In A Billion", "ENHYPEN", "MEMORABILIA", 2024],
+  ["CRIMINAL LOVE", "ENHYPEN", "MEMORABILIA", 2024],
+  ["Fatal Trouble", "ENHYPEN", "MEMORABILIA", 2024],
+  ["TEETH (Jungwon, Heeseung, Sunoo, Ni-Ki)", "ENHYPEN", "MEMORABILIA", 2024],
+  ["Lucifer (Jay, Jake, Sunghoon)", "ENHYPEN", "MEMORABILIA", 2024],
+  ["Scream", "ENHYPEN", "MEMORABILIA", 2024],
+  ["Highway 1009", "ENHYPEN", "ROMANCE : UNTOLD", 2024],
+  ["One and Only", "ENHYPEN", "Pokémon Music Collective", 2023],
+  ["Keep Swimmin' Through", "ENHYPEN", "Baby Shark's Big Movie!", 2023],
   ["Hundred Broken Hearts", "ENHYPEN", "ROMANCE : UNTOLD", 2024],
   ["Brought The Heat Back", "ENHYPEN", "ROMANCE : UNTOLD", 2024],
   ["The Sin Unknown", "ENHYPEN", "ROMANCE : UNTOLD", 2024],
@@ -6792,9 +6800,31 @@ export default function KpopRanker() {
 
   // Artist visual chain for search results: logo -> group/artist photo -> most recent album art
   const [artistVisuals, setArtistVisuals] = useState({});
+  const [artistPhotoOverrides, setArtistPhotoOverrides] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("artistPhotoOverrides") || "{}"); } catch (e) { return {}; }
+  });
+  const [editingArtistPhoto, setEditingArtistPhoto] = useState(null);
+  function setArtistPhotoOverride(artist, url) {
+    const next = { ...artistPhotoOverrides };
+    const key = artist.toLowerCase();
+    if (url) next[key] = url; else delete next[key];
+    setArtistPhotoOverrides(next);
+    localStorage.setItem("artistPhotoOverrides", JSON.stringify(next));
+    if (url) {
+      setArtistVisuals((prev) => ({ ...prev, [artist]: { type: "photo", url } }));
+    } else {
+      setArtistVisuals((prev) => { const n = { ...prev }; delete n[artist]; return n; });
+    }
+  }
+
   const artistVisualFetching = useRef(new Set());
   function ensureArtistVisual(artist) {
     if (!artist || artistVisuals[artist] || artistVisualFetching.current.has(artist)) return;
+    const override = artistPhotoOverrides[artist.toLowerCase()];
+    if (override) {
+      setArtistVisuals((prev) => ({ ...prev, [artist]: { type: "photo", url: override } }));
+      return;
+    }
     const cacheKey = `artistVisual:${artist.toLowerCase()}`;
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
@@ -6883,6 +6913,7 @@ export default function KpopRanker() {
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
         input[type="color"]::-webkit-color-swatch { border: 2px solid ${BORDER}; border-radius: 50%; }
         .kp-row-wrap { position: relative; border-radius: 10px; margin-bottom: 6px; overflow: visible; isolation: isolate; }
+        .kp-row-collapsed { position: relative; border-radius: 10px; overflow: hidden; }
         .kp-row-bg { position: absolute; inset: 0; border-radius: 10px; overflow: hidden; z-index: 0; }
         .kp-row-bg img { width: 100%; height: 100%; object-fit: cover; }
         .kp-row-bg .dim { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
@@ -7116,8 +7147,8 @@ export default function KpopRanker() {
                       </div>
                     ) : (
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button className="kp-btn-ghost" style={{ flex: 1, padding: "5px 0", fontSize: 11 }} onClick={() => setGalleryEditId(song.id)}><Pencil size={11} /> Edit</button>
-                        <button className="kp-btn-ghost" style={{ flex: 1, padding: "5px 0", fontSize: 11, color: theme.accent, borderColor: theme.accent }} onClick={() => deleteSong(song.id)}><Trash2 size={11} /> Remove</button>
+                        <button className="kp-btn-ghost" style={{ flex: 1, padding: "5px 0", fontSize: 11, justifyContent: "center" }} onClick={() => setGalleryEditId(song.id)}><Pencil size={11} /> Edit</button>
+                        <button className="kp-btn-ghost" style={{ flex: 1, padding: "5px 0", fontSize: 11, justifyContent: "center", color: theme.accent, borderColor: theme.accent }} onClick={() => deleteSong(song.id)}><Trash2 size={11} /> Remove</button>
                       </div>
                     )}
                   </div>
@@ -7159,10 +7190,11 @@ export default function KpopRanker() {
                 : undefined;
               return (
                 <div key={song.id} id={`song-row-${song.id}`} className="kp-row-wrap" style={{ background: song.bgImage ? "transparent" : idx % 2 === 0 ? CARD : ROW_ALT }}>
-                  {effectiveBg(song) && <div className="kp-row-bg"><BgImg src={effectiveBg(song)} /><div className="dim" /></div>}
-                  {!effectiveBg(song) && activeList.autoArtistImages && songAlbumArt(song) && (
-                    <div className="artist-fade-bg" style={{ backgroundImage: `linear-gradient(rgba(0,0,0,${(activeList.artistImageDim ?? 60) / 100}), rgba(0,0,0,${(activeList.artistImageDim ?? 60) / 100})), url(${songAlbumArt(song)})` }} />
-                  )}
+                  <div className="kp-row-collapsed">
+                    {effectiveBg(song) && <div className="kp-row-bg"><BgImg src={effectiveBg(song)} /><div className="dim" /></div>}
+                    {!effectiveBg(song) && activeList.autoArtistImages && songAlbumArt(song) && (
+                      <div className="artist-fade-bg" style={{ backgroundImage: `linear-gradient(rgba(0,0,0,${(activeList.artistImageDim ?? 60) / 100}), rgba(0,0,0,${(activeList.artistImageDim ?? 60) / 100})), url(${songAlbumArt(song)})` }} />
+                    )}
                   <div className="kp-row" style={{ padding: "12px 14px" }}>
                     <div className="rank-cell">
                       <Lock size={11} color={rankColor} className={`rank-lock-toggle ${song.isLocked ? "locked" : "reveal"}`}
@@ -7212,6 +7244,7 @@ export default function KpopRanker() {
                     <button className="kp-btn-ghost" style={{ padding: 6, border: "none" }} onClick={() => setExpandedId(isExpanded ? null : song.id)}>
                       {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
+                  </div>
                   </div>
 
                   {notePopoverFor === song.id && (
@@ -7380,19 +7413,39 @@ export default function KpopRanker() {
                         <div className="result-row">
                           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                             <button className="icon-btn" style={{ width: 26, height: 26 }} onClick={() => setExpandedArtists({ ...expandedArtists, [ar.artist]: !isOpen })}>{isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}</button>
-                            {artistVisuals[ar.artist] ? (
-                              artistVisuals[ar.artist].type === "logo" ? (
-                                <img src={artistVisuals[ar.artist].url} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: "contain", background: "#26223A", padding: 3, flexShrink: 0 }} />
+                            <div style={{ position: "relative", flexShrink: 0 }}>
+                              {artistVisuals[ar.artist] ? (
+                                artistVisuals[ar.artist].type === "logo" ? (
+                                  <img src={artistVisuals[ar.artist].url} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: "contain", background: "#26223A", padding: 3 }} />
+                                ) : (
+                                  <img src={artistVisuals[ar.artist].url} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover" }} />
+                                )
                               ) : (
-                                <img src={artistVisuals[ar.artist].url} alt="" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-                              )
-                            ) : (
-                              <Users size={16} color={MUTED} />
-                            )}
+                                <div style={{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center" }}><Users size={16} color={MUTED} /></div>
+                              )}
+                              <button type="button" title="Fix this photo" onClick={() => setEditingArtistPhoto(editingArtistPhoto === ar.artist ? null : ar.artist)}
+                                style={{ position: "absolute", bottom: -3, right: -3, width: 16, height: 16, borderRadius: "50%", background: theme.accent, border: `1.5px solid ${CARD}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+                                <Pencil size={8} color="#fff" />
+                              </button>
+                            </div>
                             <div style={{ fontWeight: 700, fontSize: 13.5 }}>{ar.artist} <span style={{ color: MUTED, fontWeight: 400, fontSize: 11.5 }}>· {ar.songs.length} songs</span></div>
                           </div>
                           <button className="kp-btn-bright" disabled={newCount === 0} onClick={() => triggerAdd(ar.songs, `Artist: ${ar.artist}`)}>{newCount === 0 ? "All added" : `+ Add all ${newCount}`}</button>
                         </div>
+                        {editingArtistPhoto === ar.artist && (
+                          <div style={{ display: "flex", gap: 6, padding: "0 0 10px 42px" }}>
+                            <input className="kp-input" placeholder="Paste correct photo URL…" style={{ flex: 1, fontSize: 12, padding: "6px 10px" }}
+                              defaultValue={artistPhotoOverrides[ar.artist.toLowerCase()] || ""}
+                              onKeyDown={(e) => { if (e.key === "Enter") { setArtistPhotoOverride(ar.artist, e.target.value.trim()); setEditingArtistPhoto(null); } }}
+                              id={`artist-photo-input-${i}`} />
+                            <button className="kp-btn-ghost" style={{ padding: "6px 10px", fontSize: 12 }}
+                              onClick={() => { const el = document.getElementById(`artist-photo-input-${i}`); setArtistPhotoOverride(ar.artist, el.value.trim()); setEditingArtistPhoto(null); }}>Save</button>
+                            {artistPhotoOverrides[ar.artist.toLowerCase()] && (
+                              <button className="kp-btn-ghost" style={{ padding: "6px 10px", fontSize: 12 }}
+                                onClick={() => { setArtistPhotoOverride(ar.artist, ""); setEditingArtistPhoto(null); }}>Clear</button>
+                            )}
+                          </div>
+                        )}
                         {isOpen && (
                           <div style={{ paddingLeft: 30 }}>
                             {ar.songs.map(([t, a, al, y], j) => {
