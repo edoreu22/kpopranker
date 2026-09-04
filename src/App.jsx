@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { shareList, fetchSharedList } from "./supabaseClient";
 import {
   Plus, X, Music, ChevronDown, ChevronUp, Trash2, Settings, RotateCcw,
-  StickyNote, Search, Lock, Award, FolderPlus, Disc3, Pencil, Check, Users, Wrench, UserCircle, Copy, GripVertical, List, LayoutGrid, ListChecks, Download, Share2,
+  StickyNote, Search, Lock, Award, FolderPlus, Disc3, Pencil, Check, Users, Wrench, UserCircle, Copy, GripVertical, List, LayoutGrid, ListChecks, Download, Share2, ArrowUpDown, Cookie,
 } from "lucide-react";
 
 // Storage shim: the app was originally built for Claude's artifact environment,
@@ -6923,14 +6923,19 @@ export default function KpopRanker() {
   function removeColorStop(id) { updateActiveList({ scoreColorStops: (activeList.scoreColorStops || []).filter((s) => s.id !== id) }); }
 
   const ranked = useMemo(() => computeRanks(activeList).sort((a, b) => a.rank - b.rank || b.createdAt - a.createdAt), [activeList]);
-  const [filterAwardsOnly, setFilterAwardsOnly] = useState(false);
+  const [sortMode, setSortMode] = useState("default"); // default | year | awards | notes | unranked
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showDataStorage, setShowDataStorage] = useState(false);
   const visibleRanked = useMemo(() => {
     const q = search.trim().toLowerCase();
     let arr = ranked;
     if (q) arr = arr.filter((s) => s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q) || (s.album || "").toLowerCase().includes(q));
-    if (filterAwardsOnly) arr = arr.filter((s) => (s.awards || []).length > 0);
+    if (sortMode === "awards") arr = arr.filter((s) => (s.awards || []).length > 0);
+    else if (sortMode === "notes") arr = arr.filter((s) => (s.notes || []).length > 0);
+    else if (sortMode === "unranked") arr = arr.filter((s) => s._score == null);
+    else if (sortMode === "year") arr = [...arr].sort((a, b) => (b.year || 0) - (a.year || 0));
     return arr;
-  }, [ranked, search, filterAwardsOnly]);
+  }, [ranked, search, sortMode]);
   const hasUnranked = useMemo(() => activeList.songs.some((s) => effectiveScore(activeList, s) == null), [activeList]);
 
   function fetchWikipediaKpopThumb(artist) {
@@ -7163,13 +7168,13 @@ export default function KpopRanker() {
         .kp-row-bg img { width: 100%; height: 100%; object-fit: cover; }
         .kp-row-bg .dim { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
         .artist-fade-bg {
-          position: absolute; top: 0; bottom: 0; left: 0; width: 52px; z-index: 0; border-radius: 10px 0 0 10px;
+          position: absolute; top: 0; bottom: 0; left: 0; width: 70px; z-index: 0; border-radius: 10px 0 0 10px;
           background-size: cover; background-position: center;
-          -webkit-mask-image: linear-gradient(to right, black 0%, black 10%, transparent 75%);
-          mask-image: linear-gradient(to right, black 0%, black 10%, transparent 75%);
+          -webkit-mask-image: linear-gradient(to right, black 0%, black 50%, transparent 68%);
+          mask-image: linear-gradient(to right, black 0%, black 50%, transparent 68%);
         }
         @media (max-width: 760px) {
-          .artist-fade-bg { width: 40px; }
+          .artist-fade-bg { width: 50px; -webkit-mask-image: linear-gradient(to right, black 0%, black 50%, transparent 76%); mask-image: linear-gradient(to right, black 0%, black 50%, transparent 76%); }
         }
         .art-fade-right {
           position: absolute; top: 0; bottom: 0; right: 0; width: 170px; z-index: 0; border-radius: 8px;
@@ -7216,7 +7221,7 @@ export default function KpopRanker() {
         .gallery-dim { position: absolute; inset: 0; background: rgba(0,0,0,0.8); }
         .gallery-artist { position: absolute; top: 8px; left: 6px; right: 6px; text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10.5px; }
         .gallery-title { position: absolute; top: 50%; left: 6px; right: 6px; transform: translateY(-50%); text-align: center; font-family: 'Bebas Neue', sans-serif; line-height: 1.05; font-size: 15px; }
-        .gallery-rank { position: absolute; bottom: 8px; left: 8px; font-family: 'Bebas Neue', sans-serif; line-height: 1; font-size: 22px; }
+        .gallery-rank { position: absolute; bottom: 8px; left: 10px; font-family: 'Bebas Neue', sans-serif; line-height: 1; font-size: 18px; }
         .gallery-awards-front { position: absolute; top: 8px; right: 6px; display: flex; gap: 2px; font-size: 12px; }
         .gallery-stats { position: absolute; bottom: 8px; right: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
         .gallery-tier { font-weight: 700; font-size: 11px; }
@@ -7330,6 +7335,10 @@ export default function KpopRanker() {
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button className="icon-btn" onClick={() => setShowSettings(true)} title="Settings"><Settings size={16} /></button>
+              <button onClick={() => setShowDataStorage(true)} title="How your data is stored"
+                style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, color: theme.secondary, cursor: "pointer", fontWeight: 600 }}>
+                <Cookie size={13} /> Data Storage
+              </button>
               {avatarUrl && !avatarBroken ? (
                 <img src={avatarUrl} alt="" className="avatar" referrerPolicy="no-referrer" onError={() => setAvatarBroken(true)} onClick={() => { setAvatarDraft(avatarUrl); setShowAvatarModal(true); }} />
               ) : (
@@ -7353,10 +7362,14 @@ export default function KpopRanker() {
         {!username ? (
           <div style={{ background: CARD, borderRadius: 12, padding: 20, marginBottom: 24, border: `1px solid ${BORDER}` }}>
             <div style={{ fontSize: 14, color: MUTED, marginBottom: 10 }}>What should we call you?</div>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <input className="kp-input" placeholder="your name" value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && confirmName()} />
               <button className="kp-btn" onClick={confirmName}>Join</button>
             </div>
+            <button onClick={() => setShowDataStorage(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", padding: 0, fontSize: 11.5, color: theme.secondary, cursor: "pointer", fontWeight: 600, textDecoration: "underline" }}>
+              <Cookie size={12} /> How is my data stored?
+            </button>
           </div>
         ) : (
           <>
@@ -7402,7 +7415,23 @@ export default function KpopRanker() {
               <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
                 <div style={{ position: "relative", flex: 1 }}>
                   <input className="kp-input" placeholder="Search this list…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingRight: 40 }} />
-                  <button className="search-inline-icon" style={filterAwardsOnly ? { color: theme.accent } : {}} title="Show only songs with awards" onClick={() => setFilterAwardsOnly(!filterAwardsOnly)}><Award size={16} /></button>
+                  <button className="search-inline-icon" style={sortMode !== "default" ? { color: theme.accent } : {}} title="Sort / filter" onClick={() => setShowSortMenu(!showSortMenu)}><ArrowUpDown size={16} /></button>
+                  {showSortMenu && (
+                    <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 6, zIndex: 20, minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}>
+                      {[
+                        ["default", "Default (by rank)"],
+                        ["year", "Sort by year"],
+                        ["awards", "Only songs with awards"],
+                        ["notes", "Only songs with notes"],
+                        ["unranked", "Only show unranked"],
+                      ].map(([key, label]) => (
+                        <button key={key} onClick={() => { setSortMode(key); setShowSortMenu(false); }}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", textAlign: "left", background: sortMode === key ? "#35304D" : "transparent", border: "none", color: sortMode === key ? theme.accent : TEXT, padding: "8px 10px", fontSize: 13, borderRadius: 6, cursor: "pointer" }}>
+                          {label}{sortMode === key && <Check size={13} />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <button className="icon-btn icon-btn-tall" title="Toggle view" onClick={() => saveViewMode(viewMode === "list" ? "gallery" : "list")}>
                   {viewMode === "list" ? <List size={15} /> : <LayoutGrid size={15} />}
@@ -8246,8 +8275,22 @@ export default function KpopRanker() {
       )}
 
       {/* Settings modal */}
+      {showDataStorage && (
+        <Modal title="Data Storage" onClose={() => setShowDataStorage(false)} zIndex={110}>
+          <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.6, marginBottom: 14 }}>
+            This app stores everything — your lists, rankings, notes, awards, and settings — right here in your own browser, using something similar to a cookie. Nothing is sent to a server or account; it all lives locally on this device and browser.
+          </div>
+          <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.6, marginBottom: 14 }}>
+            That means a few things worth knowing: clearing your browser's site data, switching browsers, or using a different device will not carry your lists over. Shared links you create are also <strong>temporary</strong> — they expire automatically after 30 days.
+          </div>
+          <div style={{ fontSize: 13, color: theme.secondary, lineHeight: 1.6, fontWeight: 600 }}>
+            We'd recommend exporting your list (.json, .txt, or .xlsx) every so often, just to keep a backup somewhere safe.
+          </div>
+        </Modal>
+      )}
+
       {showSettings && (
-        <Modal title="Settings" onClose={() => setShowSettings(false)}>
+      <Modal title="Settings" onClose={() => setShowSettings(false)}>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontWeight: 600 }}>Ranking mode</div>
           <div className="mode-toggle" style={{ marginBottom: 10 }}>
             <button className={rankMode === "detailed" ? "active" : ""} onClick={() => saveRankMode("detailed")}>Detailed</button>
