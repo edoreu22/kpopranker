@@ -293,7 +293,7 @@ const SEED_SONGS = [
   ["Our Summer", "TXT", "The Dream Chapter: STAR", 2019],
   ["Cat & Dog", "TXT", "The Dream Chapter: STAR", 2019],
   ["Nap of a Star", "TXT", "The Dream Chapter: STAR", 2019],
-  ["Cat & Dog (English Ver.)", "TXT", "Cat & Dog (English Ver.)", 2019],
+  ["Cat & Dog (English Ver.)", "TXT", "The Dream Chapter: STAR", 2019],
   ["Our Summer (Acoustic Mix)", "TXT", "Our Summer (Acoustic Mix)", 2019],
   ["New Rules", "TXT", "The Dream Chapter: MAGIC", 2019],
   ["Run Away", "TXT", "The Dream Chapter: MAGIC", 2019],
@@ -1596,7 +1596,7 @@ const SEED_SONGS = [
   ["TOXIN", "ATEEZ", "GOLDEN HOUR : Part.5", 2026],
   ["Fallin'", "ATEEZ", "GOLDEN HOUR : Part.5", 2026],
   ["Body", "ATEEZ", "GOLDEN HOUR : Part.5", 2026],
-  ["BAD (Japanese Ver.)", "ATEEZ", "BAD (Japanese Ver.)", 2026],
+  ["BAD (Japanese Ver.)", "ATEEZ", "GOLDEN HOUR : Part.5", 2026],
   ["Seeker", "ATEEZ", "BAD (Japanese Ver.)", 2026],
   ["HIGHER", "ATEEZ", "BAD (Japanese Ver.)", 2026],
   ["Ok! Ready (Intro)", "ASTRO", "Spring Up", 2016],
@@ -3999,7 +3999,7 @@ const SEED_SONGS = [
   ["Python", "GOT7", "Winter Heptagon", 2025],
   ["Nice to see you again", "TWS", "Nice to see you again", 2025],
   ["BLOOM (feat. Ayumu Imazu)", "TWS", "Nice to see you again", 2025],
-  ["Nice to see you again (Korean Ver.)", "TWS", "Nice to see you again (Korean Ver.)", 2026],
+  ["Nice to see you again (Korean Ver.)", "TWS", "Nice to see you again", 2026],
   ["SODA SODA", "TWS", "SODA SODA", 2026],
   ["Crown", "EXO", "Reverxe", 2026],
   ["Back It Up", "EXO", "Reverxe", 2026],
@@ -4157,7 +4157,7 @@ const SEED_SONGS = [
   ["Play, We, Dew", "QWER", "In a million noises, I'll be your harmony", 2025],
   ["Dear", "QWER", "In a million noises, I'll be your harmony", 2025],
   ["Blue Whale", "QWER", "In a million noises, I'll be your harmony", 2025],
-  ["Discord (Japanese Ver.)", "QWER", "Discord (Japanese Ver.)", 2025],
+  ["Discord (Japanese Ver.)", "QWER", "Harmony from Discord", 2025],
   ["Our Voyage", "QWER", "Ceremony", 2026],
   ["Show Down", "QWER", "Show Down", 2026],
   ["To Be Continued", "QWER", "To Be Continued", 2026],
@@ -6186,22 +6186,20 @@ function computeAlbumRanks(list) {
     if (s.year && (!g.year || s.year > g.year)) g.year = s.year;
   });
   const overrides = list.albumOverrides || {};
-  const method = list.albumScoreMethod || "average";
+  const rankBy = list.albumScoreMethod || "average"; // "average" | "overall" — determines rank order only, both scores always shown
   let entries = Array.from(groups.values()).map((g) => {
     const ov = overrides[g.key] || {};
-    let score = null;
-    if (method === "overall") {
-      score = ov.score ?? null;
-    } else {
-      const scored = g.songs.map((s) => effectiveScore(list, s)).filter((v) => v != null);
-      score = scored.length ? Math.round((scored.reduce((a, b) => a + b, 0) / scored.length) * 10) / 10 : null;
-    }
+    const scored = g.songs.map((s) => effectiveScore(list, s)).filter((v) => v != null);
+    const avgScore = scored.length ? Math.round((scored.reduce((a, b) => a + b, 0) / scored.length) * 10) / 10 : null;
+    const userScore = ov.score ?? null;
+    const score = rankBy === "overall" ? userScore : avgScore;
     const inheritedAwards = g.songs.flatMap((s) => s.awards || []);
     const ownAwards = ov.awards || [];
     const notes = [...(ov.notes || []), ...g.songs.flatMap((s) => s.notes || [])];
     return {
       id: g.key, title: g.album, artist: g.artist, album: g.album, year: g.year,
-      score: method === "overall" ? score : null, _score: score, tier: ov.tier || "", tierLocked: !!ov.tierLocked,
+      score: userScore, _score: score, _avgScore: avgScore, _userScore: userScore,
+      tier: ov.tier || "", tierLocked: !!ov.tierLocked,
       awards: [...ownAwards, ...inheritedAwards], notes, bgImage: ov.bgImage || "",
       lockedRank: ov.lockedRank ?? null, isLocked: false,
       _isAlbum: true, _songs: g.songs, categoryScores: ov.categoryScores || {},
@@ -6371,6 +6369,7 @@ export default function KpopRanker() {
 
   const [reviewQueue, setReviewQueue] = useState([]);
   const [reviewExisting, setReviewExisting] = useState(false);
+  const [reviewAlbumGroup, setReviewAlbumGroup] = useState(false);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [reviewDraft, setReviewDraft] = useState({ score: "", tier: "", bgImage: "", categoryScores: {}, awardEmoji: "", awardLabel: "", note: "" });
   const [reviewAwardPicker, setReviewAwardPicker] = useState(false);
@@ -6912,7 +6911,22 @@ export default function KpopRanker() {
     addedCountRef.current = 0;
     if (rankMode === "detailed") {
       setReviewExisting(false);
-      setReviewQueue(filtered); setReviewIndex(0);
+      if (isAlbumView) {
+        const groups = new Map();
+        filtered.forEach(([t, a, al, y]) => {
+          const key = albumKeyFor(a, al, t);
+          if (!groups.has(key)) groups.set(key, { key, album: al || t, artist: a, year: y || null, items: [] });
+          const g = groups.get(key);
+          g.items.push([t, a, al, y]);
+          if (y && (!g.year || y > g.year)) g.year = y;
+        });
+        setReviewAlbumGroup(true);
+        setReviewQueue(Array.from(groups.values()));
+      } else {
+        setReviewAlbumGroup(false);
+        setReviewQueue(filtered);
+      }
+      setReviewIndex(0);
       setReviewDraft({ score: "", tier: "", bgImage: "", categoryScores: {}, awardEmoji: "", awardLabel: "", note: "" });
       setShowReview(true);
     } else {
@@ -6934,6 +6948,7 @@ export default function KpopRanker() {
 
   function openUnrankedReview() {
     addedCountRef.current = 0;
+    setReviewAlbumGroup(false);
     const unranked = activeList.songs.filter((s) => effectiveScore(activeList, s) == null);
     if (!unranked.length) return;
     setReviewExisting(true);
@@ -6962,6 +6977,23 @@ export default function KpopRanker() {
       addedCountRef.current += 1;
       const songTitle = activeList.songs.find((s) => s.id === songId)?.title || "song";
       showToast(addedCountRef.current === 1 ? `Ranked "${songTitle}"` : `Ranked ${addedCountRef.current} songs`);
+    } else if (reviewAlbumGroup) {
+      const group = reviewQueue[reviewIndex];
+      const newSongs = group.items.map(([title, artist, album, year]) => makeSongObj({ title, artist, album, year }));
+      updateActiveSongs((songs) => [...newSongs, ...songs]);
+      recordAdd(`${group.album} — ${group.artist}`, newSongs.map((s) => s.id));
+      if (!unranked) {
+        setAlbumOverride(group.key, {
+          score: reviewDraft.score === "" ? null : Math.min(scoreScale, Number(reviewDraft.score)),
+          tier: reviewDraft.tier || "",
+          tierLocked: !!reviewDraft.tier,
+          awards: reviewDraft.awardEmoji ? [{ emoji: reviewDraft.awardEmoji, label: reviewDraft.awardLabel || "", highlighted: false }] : [],
+          notes: reviewDraft.note.trim() && username ? [{ author: username, text: reviewDraft.note.trim(), ts: Date.now() }] : [],
+          bgImage: reviewDraft.bgImage || "",
+        });
+      }
+      addedCountRef.current += 1;
+      showToast(addedCountRef.current === 1 ? `Added album "${group.album}"` : `Added ${addedCountRef.current} albums`);
     } else {
       const [title, artist, album, year] = reviewQueue[reviewIndex];
       const song = makeSongObj({
@@ -6981,13 +7013,14 @@ export default function KpopRanker() {
   }
   function reviewSkip() {
     const item = reviewQueue[reviewIndex];
-    const title = reviewExisting ? (activeList.songs.find((s) => s.id === item)?.title) : item?.[0];
+    const title = reviewExisting ? (activeList.songs.find((s) => s.id === item)?.title) : (reviewAlbumGroup ? item?.album : item?.[0]);
     if (title) showToast(`Skipped "${title}"`);
     advanceReview();
   }
   function skipRestOfReview() {
     const remaining = reviewQueue.length - reviewIndex;
-    if (remaining > 0) showToast(`Skipped ${remaining} remaining song${remaining === 1 ? "" : "s"}`);
+    const unit = reviewAlbumGroup ? "album" : "song";
+    if (remaining > 0) showToast(`Skipped ${remaining} remaining ${unit}${remaining === 1 ? "" : "s"}`);
     setShowReview(false); setReviewQueue([]); setReviewIndex(0); setReviewExisting(false);
   }
   function jumpReviewTo(idx) {
@@ -7326,7 +7359,7 @@ export default function KpopRanker() {
         .rank-lock-toggle { cursor: pointer; flex-shrink: 0; opacity: 0; transition: opacity .15s ease; }
         .rank-cell:hover .rank-lock-toggle.reveal { opacity: 1; }
         .rank-lock-toggle.locked { opacity: 1; }
-        .rank-input { background: transparent; border: 1px solid transparent; border-radius: 6px; font-weight: 700; font-size: 18px; width: 32px; padding: 2px; text-align: center; font-family: 'Bebas Neue', sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6); position: relative; z-index: 3; }
+        .rank-input { background: transparent; border: 1px solid transparent; border-radius: 6px; font-weight: 700; font-size: 18px; width: 38px; min-width: 38px; flex-shrink: 0; padding: 2px 1px; text-align: center; font-family: 'Bebas Neue', sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6); position: relative; z-index: 3; }
         .rank-input:hover, .rank-input:focus { border-color: ${BORDER}; outline: none; }
         .score-input { background: transparent; border: 1px solid transparent; border-radius: 6px; font-weight: 700; font-size: 14px; width: 60px; padding: 2px; text-align: center; font-family: 'Inter', sans-serif; display: block; margin: 0 auto; }
         .score-input:hover, .score-input:focus { border-color: ${BORDER}; outline: none; }
@@ -7359,9 +7392,9 @@ export default function KpopRanker() {
           mask-image: linear-gradient(to left, black 0%, black 35%, transparent 92%);
         }
         .art-fade-right-sm { width: 100px; }
-        .kp-row { position: relative; z-index: 1; display: grid; grid-template-columns: 44px 1.4fr 1fr 46px 56px minmax(60px, auto) 26px 30px; gap: 8px; align-items: center; }
+        .kp-row { position: relative; z-index: 1; display: grid; grid-template-columns: 52px 1.4fr 1fr 46px 56px minmax(60px, auto) 26px 30px; gap: 8px; align-items: center; }
         @media (max-width: 760px) {
-          .kp-row { grid-template-columns: 34px 1fr 40px 50px minmax(44px, auto) 22px 22px; }
+          .kp-row { grid-template-columns: 42px 1fr 40px 50px minmax(44px, auto) 22px 22px; }
           .col-album { display: none; }
           .kp-grid-2 { grid-template-columns: 1fr !important; }
         }
@@ -7616,10 +7649,10 @@ export default function KpopRanker() {
                           </label>
                           {activeList.albumMode && (
                             <div style={{ padding: "0 6px 4px" }}>
-                              <div style={{ fontSize: 10.5, color: MUTED, marginBottom: 6 }}>Ranks whole albums instead of songs. Choose how each album's score is determined:</div>
+                              <div style={{ fontSize: 10.5, color: MUTED, marginBottom: 6 }}>Both an average and your own score are always shown per album — choose which one determines rank order:</div>
                               <div className="mode-toggle" style={{ fontSize: 11.5 }}>
-                                <button className={activeList.albumScoreMethod !== "overall" ? "active" : ""} onClick={() => updateActiveList({ albumScoreMethod: "average" })}>Average of songs</button>
-                                <button className={activeList.albumScoreMethod === "overall" ? "active" : ""} onClick={() => updateActiveList({ albumScoreMethod: "overall" })}>Overall score</button>
+                                <button className={activeList.albumScoreMethod !== "overall" ? "active" : ""} onClick={() => updateActiveList({ albumScoreMethod: "average" })}>Rank by Average</button>
+                                <button className={activeList.albumScoreMethod === "overall" ? "active" : ""} onClick={() => updateActiveList({ albumScoreMethod: "overall" })}>Rank by User Input</button>
                               </div>
                             </div>
                           )}
@@ -7905,15 +7938,14 @@ export default function KpopRanker() {
 
         {username && visibleRanked.length > 0 && viewMode === "list" && isAlbumView && (
           <div>
-            <div className="kp-row" style={{ padding: "0 14px 8px", fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", gridTemplateColumns: "44px 1.4fr 70px 56px minmax(60px, auto) 26px" }}>
-              <span>Rank</span><span>Album / Artist</span><span style={{ textAlign: "center" }}>Songs</span>
-              <span style={{ textAlign: "center" }}>{activeList.showScore ? "Score" : ""}</span>
+            <div className="kp-row" style={{ padding: "0 14px 8px", fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", gridTemplateColumns: "52px 1.4fr 60px 60px 56px minmax(60px, auto) 26px" }}>
+              <span>Rank</span><span>Album / Artist</span><span style={{ textAlign: "center" }}>Avg</span><span style={{ textAlign: "center" }}>User</span>
+              <span></span>
               <span style={{ textAlign: "center" }}>{activeList.showTier ? "Tier" : ""}</span>
               <span></span>
             </div>
             {visibleRanked.map((album, idx) => {
               const isExpanded = expandedId === album.id;
-              const score = album._score;
               const tierVal = album.tier || "";
               const rankColor = album.rank === 1 ? GOLD : album.rank === 2 ? SILVER : album.rank === 3 ? BRONZE : MUTED;
               const art = album.bgImage || songAlbumArt(album);
@@ -7922,23 +7954,23 @@ export default function KpopRanker() {
                 <div key={album.id} className="kp-row-wrap" style={{ background: art ? "transparent" : idx % 2 === 0 ? CARD : ROW_ALT }}>
                   <div className="kp-row-collapsed">
                     {art && <div className="kp-row-bg"><BgImg src={art} /><div className="dim" /></div>}
-                    <div className="kp-row" style={{ padding: "12px 14px", gridTemplateColumns: "44px 1.4fr 70px 56px minmax(60px, auto) 26px" }}>
+                    <div className="kp-row" style={{ padding: "12px 14px", gridTemplateColumns: "52px 1.4fr 60px 60px 56px minmax(60px, auto) 26px" }}>
                       <div className="rank-cell"><div className="display" style={{ color: rankColor, fontSize: 18 }}>{album.rank}</div></div>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontWeight: 700, fontSize: 14, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{album.title}</div>
                         <div style={{ fontSize: 12, color: theme.secondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{album.artist}{album.year ? ` · ${album.year}` : ""}</div>
                       </div>
-                      <div style={{ textAlign: "center", fontSize: 12.5, color: MUTED }}>{album._songs.length}</div>
+                      <div style={{ textAlign: "center" }}>
+                        {activeList.showScore && <span className="score-input" title="Average of ranked songs in this album" style={{ cursor: "help", color: activeList.albumScoreMethod !== "overall" ? theme.highlight : MUTED }}>{album._avgScore != null ? album._avgScore : "—"}</span>}
+                      </div>
                       <div style={{ textAlign: "center" }}>
                         {activeList.showScore && (
-                          activeList.albumScoreMethod === "overall" ? (
-                            <input className="score-input" type="number" max={scoreScale} value={album.score ?? ""} placeholder="—"
-                              onChange={(e) => setAlbumScore(album.id, e.target.value)} />
-                          ) : (
-                            <span className="score-input" title="Average of ranked songs in this album" style={{ cursor: "help" }}>{score != null ? score : "—"}</span>
-                          )
+                          <input className="score-input" type="number" max={scoreScale} value={album._userScore ?? ""} placeholder="—"
+                            style={{ color: activeList.albumScoreMethod === "overall" ? theme.highlight : undefined }}
+                            onChange={(e) => setAlbumScore(album.id, e.target.value)} />
                         )}
                       </div>
+                      <div />
                       <div style={{ textAlign: "center" }}>
                         {activeList.showTier && (
                           activeList.tierNames?.length ? (
@@ -7959,7 +7991,17 @@ export default function KpopRanker() {
 
                   {isExpanded && (
                     <div style={{ padding: "0 16px 16px" }}>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, color: MUTED, marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Songs on this album ({album._songs.length})</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 }}>
+                        {album._songs.map((s) => (
+                          <div key={s.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "4px 0", borderBottom: `1px solid ${BORDER}` }}>
+                            <span style={{ color: TEXT }}>{s.title}</span>
+                            <span style={{ color: MUTED }}>{effectiveScore(activeList, s) ?? "—"}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 11, color: MUTED, marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Awards</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                         {(album.awards || []).map((a, i) => (
                           <span key={i} className="award-badge" title={a.label || ""}>{a.emoji}</span>
                         ))}
@@ -7967,15 +8009,6 @@ export default function KpopRanker() {
                           <button className="kp-input" style={{ width: 32, padding: 4, cursor: "pointer" }} onClick={() => setAwardPickerFor(awardPickerFor === album.id ? null : album.id)}>{draft.emoji}</button>
                           {awardPickerFor === album.id && <div className="emoji-grid" style={{ top: 36, left: 0 }}>{AWARD_EMOJIS.map((e) => <button key={e} onClick={() => { addAlbumAward(album.id, e, ""); setAwardPickerFor(null); }}>{e}</button>)}</div>}
                         </div>
-                      </div>
-                      <div style={{ fontSize: 11, color: MUTED, marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Songs on this album</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        {album._songs.map((s) => (
-                          <div key={s.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "4px 0", borderBottom: `1px solid ${BORDER}` }}>
-                            <span style={{ color: TEXT }}>{s.title}</span>
-                            <span style={{ color: MUTED }}>{effectiveScore(activeList, s) ?? "—"}</span>
-                          </div>
-                        ))}
                       </div>
                     </div>
                   )}
@@ -8353,19 +8386,27 @@ export default function KpopRanker() {
       {showReview && reviewQueue.length > 0 && (() => {
         const currentSong = reviewExisting ? activeList.songs.find((s) => s.id === reviewQueue[reviewIndex]) : null;
         if (reviewExisting && !currentSong) { advanceReview(); return null; }
-        const [title, artist, album, year] = reviewExisting ? [currentSong.title, currentSong.artist, currentSong.album, currentSong.year] : reviewQueue[reviewIndex];
+        const currentGroup = reviewAlbumGroup ? reviewQueue[reviewIndex] : null;
+        const [title, artist, album, year] = reviewExisting
+          ? [currentSong.title, currentSong.artist, currentSong.album, currentSong.year]
+          : reviewAlbumGroup
+            ? [currentGroup.album, currentGroup.artist, currentGroup.album, currentGroup.year]
+            : reviewQueue[reviewIndex];
         const isLast = reviewIndex + 1 >= reviewQueue.length;
         return (
-          <Modal title={`Track ${reviewIndex + 1} of ${reviewQueue.length}`} onClose={() => { setShowReview(false); setReviewQueue([]); setReviewExisting(false); }}>
+          <Modal title={reviewAlbumGroup ? `Album ${reviewIndex + 1} of ${reviewQueue.length}` : `Track ${reviewIndex + 1} of ${reviewQueue.length}`} onClose={() => { setShowReview(false); setReviewQueue([]); setReviewExisting(false); }}>
             {reviewQueue.length > 1 ? (
               <select className="review-title-select" value={reviewIndex} onChange={(e) => jumpReviewTo(Number(e.target.value))}>
                 {reviewQueue.map((item, i) => {
-                  const t = reviewExisting ? activeList.songs.find((s) => s.id === item)?.title || "Untitled" : item[0];
+                  const t = reviewExisting ? activeList.songs.find((s) => s.id === item)?.title || "Untitled" : (reviewAlbumGroup ? item.album : item[0]);
                   return <option key={i} value={i}>{t}</option>;
                 })}
               </select>
             ) : (
               <div className="display" style={{ fontSize: 24, color: TEXT }}>{title}</div>
+            )}
+            {reviewAlbumGroup && (
+              <div style={{ fontSize: 11.5, color: MUTED, marginTop: -8, marginBottom: 10 }}>{currentGroup.items.length} song{currentGroup.items.length === 1 ? "" : "s"} will be added — the score, tier, award, and note below apply to the album as a whole.</div>
             )}
             {(() => {
               const artKey = `${artist}|${album || title}`.toLowerCase();
