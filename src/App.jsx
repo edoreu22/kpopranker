@@ -6923,7 +6923,9 @@ export default function KpopRanker() {
   function removeColorStop(id) { updateActiveList({ scoreColorStops: (activeList.scoreColorStops || []).filter((s) => s.id !== id) }); }
 
   const ranked = useMemo(() => computeRanks(activeList).sort((a, b) => a.rank - b.rank || b.createdAt - a.createdAt), [activeList]);
-  const [sortMode, setSortMode] = useState("default"); // default | year | awards | notes | unranked
+  const [sortMode, setSortMode] = useState("default"); // default | awards | notes | unranked
+  const [yearFrom, setYearFrom] = useState("");
+  const [yearTo, setYearTo] = useState("");
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showDataStorage, setShowDataStorage] = useState(false);
   const visibleRanked = useMemo(() => {
@@ -6933,9 +6935,18 @@ export default function KpopRanker() {
     if (sortMode === "awards") arr = arr.filter((s) => (s.awards || []).length > 0);
     else if (sortMode === "notes") arr = arr.filter((s) => (s.notes || []).length > 0);
     else if (sortMode === "unranked") arr = arr.filter((s) => s._score == null);
-    else if (sortMode === "year") arr = [...arr].sort((a, b) => (b.year || 0) - (a.year || 0));
+    const from = yearFrom === "" ? null : Number(yearFrom);
+    const to = yearTo === "" ? null : Number(yearTo);
+    if (from != null || to != null) {
+      arr = arr.filter((s) => {
+        if (!s.year) return false;
+        if (from != null && s.year < from) return false;
+        if (to != null && s.year > to) return false;
+        return true;
+      });
+    }
     return arr;
-  }, [ranked, search, sortMode]);
+  }, [ranked, search, sortMode, yearFrom, yearTo]);
   const hasUnranked = useMemo(() => activeList.songs.some((s) => effectiveScore(activeList, s) == null), [activeList]);
 
   function fetchWikipediaKpopThumb(artist) {
@@ -7218,12 +7229,12 @@ export default function KpopRanker() {
         .gallery-card-front { background: ${CARD}; }
         .gallery-card-front img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
         .gallery-card-back { transform: rotateY(180deg); background: ${CARD}; padding: 10px; display: flex; flex-direction: column; cursor: default; }
-        .gallery-dim { position: absolute; inset: 0; background: rgba(0,0,0,0.8); }
-        .gallery-artist { position: absolute; top: 8px; left: 6px; right: 6px; text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10.5px; }
-        .gallery-title { position: absolute; top: 50%; left: 6px; right: 6px; transform: translateY(-50%); text-align: center; font-family: 'Bebas Neue', sans-serif; line-height: 1.05; font-size: 15px; }
-        .gallery-rank { position: absolute; bottom: 8px; left: 10px; font-family: 'Bebas Neue', sans-serif; line-height: 1; font-size: 18px; }
-        .gallery-awards-front { position: absolute; top: 8px; right: 6px; display: flex; gap: 2px; font-size: 12px; }
-        .gallery-stats { position: absolute; bottom: 8px; right: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+        .gallery-dim { position: absolute; inset: 0; background: rgba(0,0,0,0.8); z-index: 1; }
+        .gallery-artist { position: absolute; top: 8px; left: 6px; right: 6px; text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10.5px; z-index: 5; }
+        .gallery-title { position: absolute; top: 50%; left: 6px; right: 6px; transform: translateY(-50%); text-align: center; font-family: 'Bebas Neue', sans-serif; line-height: 1.05; font-size: 15px; z-index: 5; }
+        .gallery-rank { position: absolute; bottom: 10px; left: 12px; font-family: 'Bebas Neue', sans-serif; line-height: 1; font-size: 22px; z-index: 5; }
+        .gallery-awards-front { position: absolute; top: 8px; right: 6px; display: flex; gap: 2px; font-size: 12px; z-index: 5; }
+        .gallery-stats { position: absolute; bottom: 8px; right: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; z-index: 5; }
         .gallery-tier { font-weight: 700; font-size: 11px; }
         .gallery-score { font-weight: 700; font-size: 13px; }
         .gallery-back-scroll { flex: 1; overflow-y: auto; margin: 6px 0; }
@@ -7335,10 +7346,6 @@ export default function KpopRanker() {
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button className="icon-btn" onClick={() => setShowSettings(true)} title="Settings"><Settings size={16} /></button>
-              <button onClick={() => setShowDataStorage(true)} title="How your data is stored"
-                style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, color: theme.secondary, cursor: "pointer", fontWeight: 600 }}>
-                <Cookie size={13} /> Data Storage
-              </button>
               {avatarUrl && !avatarBroken ? (
                 <img src={avatarUrl} alt="" className="avatar" referrerPolicy="no-referrer" onError={() => setAvatarBroken(true)} onClick={() => { setAvatarDraft(avatarUrl); setShowAvatarModal(true); }} />
               ) : (
@@ -7415,12 +7422,11 @@ export default function KpopRanker() {
               <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
                 <div style={{ position: "relative", flex: 1 }}>
                   <input className="kp-input" placeholder="Search this list…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingRight: 40 }} />
-                  <button className="search-inline-icon" style={sortMode !== "default" ? { color: theme.accent } : {}} title="Sort / filter" onClick={() => setShowSortMenu(!showSortMenu)}><ArrowUpDown size={16} /></button>
+                  <button className="search-inline-icon" style={(sortMode !== "default" || yearFrom !== "" || yearTo !== "") ? { color: theme.accent } : {}} title="Sort / filter" onClick={() => setShowSortMenu(!showSortMenu)}><ArrowUpDown size={16} /></button>
                   {showSortMenu && (
-                    <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 6, zIndex: 20, minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}>
+                    <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, padding: 6, zIndex: 20, minWidth: 220, boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}>
                       {[
                         ["default", "Default (by rank)"],
-                        ["year", "Sort by year"],
                         ["awards", "Only songs with awards"],
                         ["notes", "Only songs with notes"],
                         ["unranked", "Only show unranked"],
@@ -7430,6 +7436,17 @@ export default function KpopRanker() {
                           {label}{sortMode === key && <Check size={13} />}
                         </button>
                       ))}
+                      <div style={{ borderTop: `1px solid ${BORDER}`, margin: "6px 4px", paddingTop: 8 }}>
+                        <div style={{ fontSize: 11, color: MUTED, padding: "0 6px 6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Filter by year</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 6px" }}>
+                          <input className="kp-input" type="number" placeholder="From" value={yearFrom} onChange={(e) => setYearFrom(e.target.value)} style={{ padding: "6px 8px", fontSize: 12.5 }} />
+                          <span style={{ color: MUTED, fontSize: 12 }}>–</span>
+                          <input className="kp-input" type="number" placeholder="To" value={yearTo} onChange={(e) => setYearTo(e.target.value)} style={{ padding: "6px 8px", fontSize: 12.5 }} />
+                        </div>
+                        {(yearFrom !== "" || yearTo !== "") && (
+                          <button onClick={() => { setYearFrom(""); setYearTo(""); }} style={{ background: "none", border: "none", color: theme.accent, fontSize: 11.5, padding: "6px 6px 2px", cursor: "pointer" }}>Clear year filter</button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -8291,6 +8308,10 @@ export default function KpopRanker() {
 
       {showSettings && (
       <Modal title="Settings" onClose={() => setShowSettings(false)}>
+          <button onClick={() => { setShowSettings(false); setShowDataStorage(true); }}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "8px 12px", fontSize: 12.5, color: theme.secondary, cursor: "pointer", fontWeight: 600, marginBottom: 18 }}>
+            <Cookie size={14} /> How is my data stored?
+          </button>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontWeight: 600 }}>Ranking mode</div>
           <div className="mode-toggle" style={{ marginBottom: 10 }}>
             <button className={rankMode === "detailed" ? "active" : ""} onClick={() => saveRankMode("detailed")}>Detailed</button>
