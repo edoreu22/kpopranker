@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { shareList, fetchSharedList } from "./supabaseClient";
 import {
   Plus, X, Music, ChevronDown, ChevronUp, Trash2, Settings, RotateCcw,
-  StickyNote, Search, Lock, Award, FolderPlus, Disc3, Pencil, Check, Users, Wrench, UserCircle, Copy, GripVertical, List, LayoutGrid, ListChecks, Download,
+  StickyNote, Search, Lock, Award, FolderPlus, Disc3, Pencil, Check, Users, Wrench, UserCircle, Copy, GripVertical, List, LayoutGrid, ListChecks, Download, Share2,
 } from "lucide-react";
 
 // Storage shim: the app was originally built for Claude's artifact environment,
@@ -6001,9 +6001,9 @@ function computeRanks(list) {
   return result;
 }
 
-function Modal({ title, onClose, children, wide }) {
+function Modal({ title, onClose, children, wide, zIndex }) {
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }} onClick={onClose}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: zIndex || 100, padding: 16 }} onClick={onClose}>
       <div style={{ background: CARD, borderRadius: 14, padding: 22, width: wide ? 620 : 440, maxWidth: "100%", maxHeight: "85vh", overflowY: "auto", border: `1px solid ${BORDER}` }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div className="display" style={{ fontSize: 22, color: TEXT }}>{title}</div>
@@ -6125,6 +6125,7 @@ export default function KpopRanker() {
   const [newScore, setNewScore] = useState("");
   const [newTier, setNewTier] = useState("");
   const [newBg, setNewBg] = useState("");
+  const [newIsAlbum, setNewIsAlbum] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [newListTags, setNewListTags] = useState("");
   const [newListScale, setNewListScale] = useState(100);
@@ -6318,9 +6319,10 @@ export default function KpopRanker() {
   }
 
   function addSong() {
-    if (!newTitle.trim() || !newArtist.trim()) return;
+    const effectiveTitle = newIsAlbum ? newAlbum.trim() : newTitle.trim();
+    if (!effectiveTitle || !newArtist.trim()) return;
     const song = makeSongObj({
-      title: newTitle.trim(), artist: newArtist.trim(), album: newAlbum.trim(),
+      title: effectiveTitle, artist: newArtist.trim(), album: newAlbum.trim(),
       year: newYear === "" ? null : Number(newYear),
       score: newScore === "" ? null : Math.min(scoreScale, Number(newScore)),
       tier: newTier.trim(), bgImage: newBg.trim(),
@@ -6328,7 +6330,7 @@ export default function KpopRanker() {
     updateActiveSongs((songs) => [song, ...songs]);
     recordAdd(`${song.title} — ${song.artist}`, [song.id]);
     setNewTitle(""); setNewArtist(""); setNewAlbum(""); setNewYear("");
-    setNewScore(""); setNewTier(""); setNewBg("");
+    setNewScore(""); setNewTier(""); setNewBg(""); setNewIsAlbum(false);
     setShowAdd(false);
   }
 
@@ -6978,10 +6980,10 @@ export default function KpopRanker() {
         .kp-btn-bright:disabled { opacity: 0.35; cursor: default; }
         .kp-btn-ghost { background: transparent; color: ${MUTED}; border: 1px solid ${BORDER}; border-radius: 8px; padding: 9px 14px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
         .kp-btn-ghost:hover { border-color: ${theme.secondary}; color: ${TEXT}; }
-        .expand-btn { display: inline-flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; border: 1px solid ${BORDER}; border-radius: 8px; background: transparent; color: ${MUTED}; cursor: pointer; padding: 9px; max-width: 40px; transition: max-width .28s ease, padding .28s ease, color .2s, border-color .2s; }
-        .expand-btn:hover { max-width: 180px; padding: 9px 14px; border-color: ${theme.secondary}; color: ${TEXT}; }
-        .expand-btn .label { opacity: 0; transition: opacity .15s ease .05s; }
-        .expand-btn:hover .label { opacity: 1; }
+        .expand-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0; overflow: hidden; white-space: nowrap; border: 1px solid ${BORDER}; border-radius: 8px; background: transparent; color: ${MUTED}; cursor: pointer; padding: 9px; max-width: 40px; transition: max-width .28s ease, padding .28s ease, gap .28s ease, color .2s, border-color .2s; }
+        .expand-btn:hover { max-width: 180px; padding: 9px 14px; gap: 6px; border-color: ${theme.secondary}; color: ${TEXT}; }
+        .expand-btn .label { opacity: 0; max-width: 0; overflow: hidden; transition: opacity .15s ease .05s, max-width .28s ease; }
+        .expand-btn:hover .label { opacity: 1; max-width: 140px; }
         .icon-btn { background: transparent; border: 1px solid ${BORDER}; border-radius: 8px; color: ${MUTED}; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
         .icon-btn:hover { color: ${TEXT}; border-color: ${theme.secondary}; }
         .icon-btn-tall { height: 42px; padding: 0 12px; width: auto; }
@@ -7007,13 +7009,13 @@ export default function KpopRanker() {
         .kp-row-bg img { width: 100%; height: 100%; object-fit: cover; }
         .kp-row-bg .dim { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
         .artist-fade-bg {
-          position: absolute; top: 0; bottom: 0; left: 0; width: 150px; z-index: 0; border-radius: 10px 0 0 10px;
+          position: absolute; top: 0; bottom: 0; left: 0; width: 64px; z-index: 0; border-radius: 10px 0 0 10px;
           background-size: cover; background-position: center;
-          -webkit-mask-image: linear-gradient(to right, black 0%, black 20%, transparent 65%);
-          mask-image: linear-gradient(to right, black 0%, black 20%, transparent 65%);
+          -webkit-mask-image: linear-gradient(to right, black 0%, black 15%, transparent 60%);
+          mask-image: linear-gradient(to right, black 0%, black 15%, transparent 60%);
         }
         @media (max-width: 760px) {
-          .artist-fade-bg { width: 90px; }
+          .artist-fade-bg { width: 48px; }
         }
         .art-fade-right {
           position: absolute; top: 0; bottom: 0; right: 0; width: 170px; z-index: 0; border-radius: 8px;
@@ -7147,16 +7149,17 @@ export default function KpopRanker() {
                 <button className="expand-btn" onClick={() => setShowAdd(true)}><Plus size={16} color={MUTED} style={{ flexShrink: 0 }} /><span className="label">Add Song</span></button>
                 <button className="expand-btn" onClick={() => setShowImport(true)}><Music size={16} color={MUTED} style={{ flexShrink: 0 }} /><span className="label">Import List</span></button>
                 <button className="expand-btn" onClick={() => { setConfirmArtist(null); setShowRemove(true); }}><Trash2 size={16} color={MUTED} style={{ flexShrink: 0 }} /><span className="label">Remove</span></button>
+                <button className="icon-btn icon-btn-tall" title="Share list" onClick={() => { setShowShareModal(true); setShareLink(""); setShareError(""); setShareCopied(false); }}><Share2 size={15} /></button>
               </div>
             </div>
 
             {activeList.songs.length > 0 && (
               <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
                 <input className="kp-input" placeholder="Search this list…" value={search} onChange={(e) => setSearch(e.target.value)} />
-                <button className={`icon-btn icon-btn-tall ${filterAwardsOnly ? "active" : ""}`} style={filterAwardsOnly ? { color: theme.accent, borderColor: theme.accent } : {}} title="Show only songs with awards" onClick={() => setFilterAwardsOnly(!filterAwardsOnly)}><Award size={15} /></button>
                 <button className="icon-btn icon-btn-tall" title="Toggle view" onClick={() => saveViewMode(viewMode === "list" ? "gallery" : "list")}>
                   {viewMode === "list" ? <List size={15} /> : <LayoutGrid size={15} />}
                 </button>
+                <button className={`icon-btn icon-btn-tall ${filterAwardsOnly ? "active" : ""}`} style={filterAwardsOnly ? { color: theme.accent, borderColor: theme.accent } : {}} title="Show only songs with awards" onClick={() => setFilterAwardsOnly(!filterAwardsOnly)}><Award size={15} /></button>
               </div>
             )}
           </>
@@ -7430,7 +7433,7 @@ export default function KpopRanker() {
 
       {/* Import List modal */}
       {showShareModal && (
-        <Modal title="Share list" onClose={() => setShowShareModal(false)}>
+        <Modal title="Share list" onClose={() => setShowShareModal(false)} zIndex={110}>
           <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
             Creates a view-only snapshot of "{activeList.name}" as it is right now. Anyone with the link can view it and import their own copy. The link expires automatically after 30 days.
           </div>
@@ -7451,6 +7454,14 @@ export default function KpopRanker() {
             </div>
           )}
           {shareError && <div style={{ color: theme.accent, fontSize: 12.5, marginTop: 10 }}>{shareError}</div>}
+
+          <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 16 }}>
+            <div style={{ fontSize: 12, color: MUTED, fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Or export a file</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="kp-btn-ghost" onClick={() => exportList("json")}><Download size={13} /> Export .json</button>
+              <button className="kp-btn-ghost" onClick={() => exportList("txt")}><Download size={13} /> Export .txt</button>
+            </div>
+          </div>
         </Modal>
       )}
 
@@ -7474,13 +7485,23 @@ export default function KpopRanker() {
       {/* Add Song modal */}
       {showAdd && (
         <Modal title="Add a song" onClose={() => setShowAdd(false)}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: MUTED, cursor: "pointer", marginBottom: 12 }}>
+            <input type="checkbox" checked={newIsAlbum} onChange={(e) => setNewIsAlbum(e.target.checked)} /> Add as a whole album instead of a single song
+          </label>
+          {newIsAlbum ? (
+            <div className="kp-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+              <input className="kp-input" placeholder="Album name" value={newAlbum} onChange={(e) => setNewAlbum(e.target.value)} />
+              <input className="kp-input" placeholder="Artist / group" value={newArtist} onChange={(e) => setNewArtist(e.target.value)} />
+            </div>
+          ) : (
+            <div className="kp-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+              <input className="kp-input" placeholder="Song title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
+              <input className="kp-input" placeholder="Artist / group" value={newArtist} onChange={(e) => setNewArtist(e.target.value)} />
+            </div>
+          )}
           <div className="kp-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-            <input className="kp-input" placeholder="Song title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
-            <input className="kp-input" placeholder="Artist / group" value={newArtist} onChange={(e) => setNewArtist(e.target.value)} />
-          </div>
-          <div className="kp-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-            <input className="kp-input" placeholder="Album" value={newAlbum} onChange={(e) => setNewAlbum(e.target.value)} />
-            <input className="kp-input" type="number" placeholder="Year" value={newYear} onChange={(e) => setNewYear(e.target.value)} />
+            {!newIsAlbum && <input className="kp-input" placeholder="Album" value={newAlbum} onChange={(e) => setNewAlbum(e.target.value)} />}
+            <input className="kp-input" type="number" placeholder="Year" value={newYear} onChange={(e) => setNewYear(e.target.value)} style={newIsAlbum ? { gridColumn: "1 / -1" } : {}} />
           </div>
           <div className="kp-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
             <input className="kp-input" type="number" max={scoreScale} placeholder={`Score (out of ${scoreScale})`} value={newScore} onChange={(e) => setNewScore(e.target.value)} />
@@ -7959,9 +7980,6 @@ export default function KpopRanker() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `1px solid ${BORDER}`, paddingTop: 16 }}>
             <div style={{ display: "flex", gap: 8 }}>
               <button className="kp-btn-ghost" onClick={duplicateList}><Copy size={13} /> Duplicate this list</button>
-              <button className="kp-btn-ghost" onClick={() => exportList("json")}><Download size={13} /> Export .json</button>
-              <button className="kp-btn-ghost" onClick={() => exportList("txt")}><Download size={13} /> Export .txt</button>
-              <button className="kp-btn-ghost" onClick={() => { setShowShareModal(true); setShareLink(""); setShareError(""); setShareCopied(false); }}>Share list</button>
             </div>
             {confirmDeleteList ? (
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
