@@ -7069,6 +7069,20 @@ export default function KpopRanker() {
         .gallery-back-note { font-size: 10.5px; background: #26223A; border-radius: 5px; padding: 4px 6px; margin-bottom: 4px; }
   `;
 
+  useEffect(() => {
+    if (!sharedView?.list) return;
+    (sharedView.list.songs || []).forEach((song) => {
+      if (!song.bgImage) ensureAlbumArt(song.artist, song.album || song.title);
+    });
+  }, [sharedView, albumArt]);
+
+  function sharedEffectiveBg(song) {
+    if (song.bgImage) return song.bgImage;
+    if (!sharedView.list.autoAlbumArt) return "";
+    const key = `${song.artist}|${song.album || song.title}`.toLowerCase();
+    return albumArt[key] || "";
+  }
+
   if (loading) return <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: MUTED, fontFamily: "Inter, sans-serif" }}>Loading…</div></div>;
 
   if (sharedViewStatus === "loading") {
@@ -7082,19 +7096,6 @@ export default function KpopRanker() {
         <button className="kp-btn" style={{ background: theme.accent, marginTop: 8 }} onClick={() => { setSharedViewStatus("idle"); window.history.replaceState({}, "", window.location.pathname); }}>Go to my lists</button>
       </div>
     );
-  }
-  useEffect(() => {
-    if (!sharedView?.list) return;
-    (sharedView.list.songs || []).forEach((song) => {
-      if (!song.bgImage) ensureAlbumArt(song.artist, song.album || song.title);
-    });
-  }, [sharedView, albumArt]);
-
-  function sharedEffectiveBg(song) {
-    if (song.bgImage) return song.bgImage;
-    if (!sharedView.list.autoAlbumArt) return "";
-    const key = `${song.artist}|${song.album || song.title}`.toLowerCase();
-    return albumArt[key] || "";
   }
 
   if (sharedView) {
