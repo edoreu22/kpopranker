@@ -34,13 +34,26 @@ if (typeof window !== "undefined" && !window.storage) {
   };
 }
 
-const DEFAULT_THEME = { accent: "#FF3D7F", secondary: "#B8A6FF", highlight: "#FFC857", background: "#14121F" };
+const DEFAULT_THEME = { accent: "#FF3D7F", secondary: "#B8A6FF", highlight: "#FFC857", background: "#14121F", text: "#F3F0FA", card: "#1D1A2B" };
 const CATALOG_LAST_UPDATED = "September 2, 2026";
 const APP_LAST_UPDATED = "September 2, 2026";
 const CARD = "#1D1A2B";
 const ROW_ALT = "#221E33";
 const TEXT = "#F3F0FA";
 const MUTED = "#9C96B5";
+const DEFAULT_CARD = CARD;
+const DEFAULT_TEXT = TEXT;
+function shadeColor(hex, percent) {
+  try {
+    const h = hex.replace("#", "");
+    const num = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
+    let r = (num >> 16) + Math.round(2.55 * percent);
+    let g = ((num >> 8) & 0x00ff) + Math.round(2.55 * percent);
+    let b = (num & 0x0000ff) + Math.round(2.55 * percent);
+    r = Math.min(255, Math.max(0, r)); g = Math.min(255, Math.max(0, g)); b = Math.min(255, Math.max(0, b));
+    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+  } catch (e) { return hex; }
+}
 const BORDER = "#35304D";
 const GOLD = "#FFD966";
 const SILVER = "#C9CDD6";
@@ -6157,6 +6170,55 @@ function computeRanks(list) {
   return result;
 }
 
+// Groups a standard list's songs by (artist, album) into album-level "entries" for
+// Album Mode / Albums Only. Each entry looks enough like a song object (id, title,
+// artist, _score, rank, awards, notes) that the rest of the UI can display it, but
+// carries `_isAlbum: true` and `_songs` (its real constituent song objects) so the
+// row rendering and editing code can tell it apart from a real song.
+function albumKeyFor(artist, album, title) { return `${artist}|${album || title}`.toLowerCase(); }
+function computeAlbumRanks(list) {
+  const groups = new Map();
+  (list.songs || []).forEach((s) => {
+    const key = albumKeyFor(s.artist, s.album, s.title);
+    if (!groups.has(key)) groups.set(key, { key, artist: s.artist, album: s.album || s.title, year: s.year || null, songs: [] });
+    const g = groups.get(key);
+    g.songs.push(s);
+    if (s.year && (!g.year || s.year > g.year)) g.year = s.year;
+  });
+  const overrides = list.albumOverrides || {};
+  const method = list.albumScoreMethod || "average";
+  let entries = Array.from(groups.values()).map((g) => {
+    const ov = overrides[g.key] || {};
+    let score = null;
+    if (method === "overall") {
+      score = ov.score ?? null;
+    } else {
+      const scored = g.songs.map((s) => effectiveScore(list, s)).filter((v) => v != null);
+      score = scored.length ? Math.round((scored.reduce((a, b) => a + b, 0) / scored.length) * 10) / 10 : null;
+    }
+    const inheritedAwards = g.songs.flatMap((s) => s.awards || []);
+    const ownAwards = ov.awards || [];
+    const notes = [...(ov.notes || []), ...g.songs.flatMap((s) => s.notes || [])];
+    return {
+      id: g.key, title: g.album, artist: g.artist, album: g.album, year: g.year,
+      score: method === "overall" ? score : null, _score: score, tier: ov.tier || "", tierLocked: !!ov.tierLocked,
+      awards: [...ownAwards, ...inheritedAwards], notes, bgImage: ov.bgImage || "",
+      lockedRank: ov.lockedRank ?? null, isLocked: false,
+      _isAlbum: true, _songs: g.songs, categoryScores: ov.categoryScores || {},
+    };
+  });
+  const locked = entries.filter((e) => e.lockedRank != null).sort((a, b) => a.lockedRank - b.lockedRank || (b._score ?? -1) - (a._score ?? -1));
+  const unlockedSorted = entries.filter((e) => e.lockedRank == null).sort((a, b) => (b._score ?? -1) - (a._score ?? -1));
+  const result = [];
+  let li = 0, ui = 0, pos = 1;
+  while (li < locked.length || ui < unlockedSorted.length) {
+    if (li < locked.length && locked[li].lockedRank <= pos) { result.push({ ...locked[li], rank: locked[li].lockedRank, isLocked: true }); li++; }
+    else if (ui < unlockedSorted.length) { result.push({ ...unlockedSorted[ui], rank: pos, isLocked: false }); ui++; pos++; }
+    else { result.push({ ...locked[li], rank: locked[li].lockedRank, isLocked: true }); li++; }
+  }
+  return result;
+}
+
 function Modal({ title, onClose, children, wide, zIndex }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: zIndex || 100, padding: 16 }} onClick={onClose}>
@@ -6181,7 +6243,8 @@ const DEFAULT_LIST = () => ({
   id: "default", name: "All Kpop Songs Ranked", tags: [], createdAt: Date.now(), songs: [],
   scoreScale: 100, showScore: true, showTier: true, autoArtistImages: true, autoAlbumArt: false, artistImageDim: 60,
   advancedMode: false, advancedScoreMode: "sum", categories: DEFAULT_CATEGORIES(),
-  tierNames: DEFAULT_TIERS(), autoTier: false, autoTierRules: [],
+  tierNames: DEFAULT_TIERS(), autoTier: false, autoTierRules: [], listType: "standard",
+  albumMode: false, albumScoreMethod: "average", albumOverrides: {},
   scoreColorMode: "single", scoreColorSingle: "#FFC857", scoreGradientFrom: "#5FD9C0", scoreGradientTo: "#FF3D7F", scoreColorStops: [],
 });
 
@@ -6245,6 +6308,9 @@ export default function KpopRanker() {
 
   const [activeListId, setActiveListId] = useState(null);
   const [theme, setTheme] = useState(DEFAULT_THEME);
+  const TEXT = theme.text || DEFAULT_TEXT;
+  const CARD = theme.card || DEFAULT_CARD;
+  const ROW_ALT = shadeColor(CARD, 8);
   const [rankMode, setRankMode] = useState("detailed");
   const [viewMode, setViewMode] = useState("list");
   const [loading, setLoading] = useState(true);
@@ -6292,6 +6358,12 @@ export default function KpopRanker() {
   const [newListName, setNewListName] = useState("");
   const [newListTags, setNewListTags] = useState("");
   const [newListScale, setNewListScale] = useState(100);
+  const [newListType, setNewListType] = useState("standard");
+  const [newListShowScore, setNewListShowScore] = useState(true);
+  const [newListShowTier, setNewListShowTier] = useState(true);
+  const [newListArtFade, setNewListArtFade] = useState(true);
+  const [newListAdvanced, setNewListAdvanced] = useState(false);
+  const [showCreateMoreOptions, setShowCreateMoreOptions] = useState(false);
 
   const [rankQuery, setRankQuery] = useState("");
   const [searchIn, setSearchIn] = useState({ song: true, artist: true, album: true });
@@ -6363,6 +6435,17 @@ export default function KpopRanker() {
   }
   function updateActiveSongs(updater) { saveLists(lists.map((l) => (l.id === activeListId ? { ...l, songs: updater(l.songs) } : l))); }
   function updateActiveList(patch) { saveLists(lists.map((l) => (l.id === activeListId ? { ...l, ...patch } : l))); }
+  function setAlbumOverride(key, patchFn) {
+    const current = activeList.albumOverrides || {};
+    const existing = current[key] || {};
+    const patch = typeof patchFn === "function" ? patchFn(existing) : patchFn;
+    updateActiveList({ albumOverrides: { ...current, [key]: { ...existing, ...patch } } });
+  }
+  function setAlbumScore(key, value) { setAlbumOverride(key, { score: value === "" || value == null ? null : Math.min(scoreScale, Number(value)) }); }
+  function setAlbumTier(key, value) { setAlbumOverride(key, { tier: value, tierLocked: true }); }
+  function addAlbumAward(key, emoji, label) { setAlbumOverride(key, (ex) => ({ awards: [...(ex.awards || []), { emoji, label, highlighted: false }] })); }
+  function removeAlbumAward(key, idx) { setAlbumOverride(key, (ex) => ({ awards: (ex.awards || []).filter((_, i) => i !== idx) })); }
+  function addAlbumNote(key, text) { if (!text.trim() || !username) return; setAlbumOverride(key, (ex) => ({ notes: [...(ex.notes || []), { author: username, text: text.trim(), ts: Date.now() }] })); }
 
   async function switchList(id) {
     setActiveListId(id); setExpandedId(null); setListDropdownOpen(false);
@@ -6373,9 +6456,15 @@ export default function KpopRanker() {
     if (!name) return;
     const id = `list-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     const tags = newListTags.split(",").map((t) => t.trim()).filter(Boolean);
-    saveLists([...lists, { ...DEFAULT_LIST(), id, name, tags, scoreScale: newListScale, createdAt: Date.now(), songs: [] }]);
+    saveLists([...lists, {
+      ...DEFAULT_LIST(), id, name, tags, scoreScale: newListScale, createdAt: Date.now(), songs: [],
+      listType: newListType, showScore: newListShowScore, showTier: newListShowTier,
+      autoArtistImages: newListArtFade, advancedMode: newListAdvanced,
+    }]);
     switchList(id);
     setNewListName(""); setNewListTags(""); setNewListScale(100);
+    setNewListType("standard"); setNewListShowScore(true); setNewListShowTier(true);
+    setNewListArtFade(true); setNewListAdvanced(false); setShowCreateMoreOptions(false);
     setShowNewList(false);
     setShowListOptions(true);
   }
@@ -6966,7 +7055,11 @@ export default function KpopRanker() {
   function updateColorStop(id, patch) { updateActiveList({ scoreColorStops: (activeList.scoreColorStops || []).map((s) => (s.id === id ? { ...s, ...patch } : s)) }); }
   function removeColorStop(id) { updateActiveList({ scoreColorStops: (activeList.scoreColorStops || []).filter((s) => s.id !== id) }); }
 
-  const ranked = useMemo(() => computeRanks(activeList).sort((a, b) => a.rank - b.rank || b.createdAt - a.createdAt), [activeList]);
+  const isAlbumView = activeList.listType === "albums-only" || activeList.albumMode;
+  const ranked = useMemo(() => {
+    if (isAlbumView) return computeAlbumRanks(activeList).sort((a, b) => a.rank - b.rank);
+    return computeRanks(activeList).sort((a, b) => a.rank - b.rank || b.createdAt - a.createdAt);
+  }, [activeList, isAlbumView]);
   const [sortMode, setSortMode] = useState("default"); // default | awards | notes | unranked
   const [yearFrom, setYearFrom] = useState("");
   const [yearTo, setYearTo] = useState("");
@@ -7229,11 +7322,11 @@ export default function KpopRanker() {
         .icon-btn-tall { height: 42px; padding: 0 12px; width: auto; }
         .search-inline-icon { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: none; color: ${MUTED}; cursor: pointer; padding: 8px; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
         .search-inline-icon:hover { background: #2f2a45; color: ${TEXT}; }
-        .rank-cell { display: flex; align-items: center; gap: 1px; }
+        .rank-cell { display: flex; align-items: center; gap: 1px; position: relative; z-index: 3; }
         .rank-lock-toggle { cursor: pointer; flex-shrink: 0; opacity: 0; transition: opacity .15s ease; }
         .rank-cell:hover .rank-lock-toggle.reveal { opacity: 1; }
         .rank-lock-toggle.locked { opacity: 1; }
-        .rank-input { background: transparent; border: 1px solid transparent; border-radius: 6px; font-weight: 700; font-size: 18px; width: 32px; padding: 2px; text-align: center; font-family: 'Bebas Neue', sans-serif; }
+        .rank-input { background: transparent; border: 1px solid transparent; border-radius: 6px; font-weight: 700; font-size: 18px; width: 32px; padding: 2px; text-align: center; font-family: 'Bebas Neue', sans-serif; text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6); position: relative; z-index: 3; }
         .rank-input:hover, .rank-input:focus { border-color: ${BORDER}; outline: none; }
         .score-input { background: transparent; border: 1px solid transparent; border-radius: 6px; font-weight: 700; font-size: 14px; width: 60px; padding: 2px; text-align: center; font-family: 'Inter', sans-serif; display: block; margin: 0 auto; }
         .score-input:hover, .score-input:focus { border-color: ${BORDER}; outline: none; }
@@ -7515,6 +7608,23 @@ export default function KpopRanker() {
                           {label}{sortMode === key && <Check size={13} />}
                         </button>
                       ))}
+                      {activeList.listType !== "albums-only" && (
+                        <div style={{ borderTop: `1px solid ${BORDER}`, margin: "6px 4px", paddingTop: 8, paddingBottom: 2 }}>
+                          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 6px 6px", cursor: "pointer" }}>
+                            <span style={{ fontSize: 12.5, color: TEXT, fontWeight: 600 }}>Album Mode</span>
+                            <input type="checkbox" checked={!!activeList.albumMode} onChange={(e) => updateActiveList({ albumMode: e.target.checked })} />
+                          </label>
+                          {activeList.albumMode && (
+                            <div style={{ padding: "0 6px 4px" }}>
+                              <div style={{ fontSize: 10.5, color: MUTED, marginBottom: 6 }}>Ranks whole albums instead of songs. Choose how each album's score is determined:</div>
+                              <div className="mode-toggle" style={{ fontSize: 11.5 }}>
+                                <button className={activeList.albumScoreMethod !== "overall" ? "active" : ""} onClick={() => updateActiveList({ albumScoreMethod: "average" })}>Average of songs</button>
+                                <button className={activeList.albumScoreMethod === "overall" ? "active" : ""} onClick={() => updateActiveList({ albumScoreMethod: "overall" })}>Overall score</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div style={{ borderTop: `1px solid ${BORDER}`, margin: "6px 4px", paddingTop: 8 }}>
                         <div style={{ fontSize: 11, color: MUTED, padding: "0 6px 6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Filter by year</div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 6px" }}>
@@ -7636,7 +7746,7 @@ export default function KpopRanker() {
         })()}
 
         {/* LIST VIEW */}
-        {username && visibleRanked.length > 0 && viewMode === "list" && (
+        {username && visibleRanked.length > 0 && viewMode === "list" && !isAlbumView && (
           <div>
             <div className="kp-row" style={{ padding: "0 14px 8px", fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em" }}>
               <span>Rank</span><span>Song / Artist</span><span className="col-album">Album</span>
@@ -7785,6 +7895,88 @@ export default function KpopRanker() {
                       </div>
 
                       <div style={{ fontSize: 11, color: MUTED, margin: "10px 0" }}>added by {song.addedBy || "someone"} · {timeAgo(song.createdAt)}</div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {username && visibleRanked.length > 0 && viewMode === "list" && isAlbumView && (
+          <div>
+            <div className="kp-row" style={{ padding: "0 14px 8px", fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", gridTemplateColumns: "44px 1.4fr 70px 56px minmax(60px, auto) 26px" }}>
+              <span>Rank</span><span>Album / Artist</span><span style={{ textAlign: "center" }}>Songs</span>
+              <span style={{ textAlign: "center" }}>{activeList.showScore ? "Score" : ""}</span>
+              <span style={{ textAlign: "center" }}>{activeList.showTier ? "Tier" : ""}</span>
+              <span></span>
+            </div>
+            {visibleRanked.map((album, idx) => {
+              const isExpanded = expandedId === album.id;
+              const score = album._score;
+              const tierVal = album.tier || "";
+              const rankColor = album.rank === 1 ? GOLD : album.rank === 2 ? SILVER : album.rank === 3 ? BRONZE : MUTED;
+              const art = album.bgImage || songAlbumArt(album);
+              const draft = awardDrafts[album.id] || { emoji: "🏆", label: "" };
+              return (
+                <div key={album.id} className="kp-row-wrap" style={{ background: art ? "transparent" : idx % 2 === 0 ? CARD : ROW_ALT }}>
+                  <div className="kp-row-collapsed">
+                    {art && <div className="kp-row-bg"><BgImg src={art} /><div className="dim" /></div>}
+                    <div className="kp-row" style={{ padding: "12px 14px", gridTemplateColumns: "44px 1.4fr 70px 56px minmax(60px, auto) 26px" }}>
+                      <div className="rank-cell"><div className="display" style={{ color: rankColor, fontSize: 18 }}>{album.rank}</div></div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{album.title}</div>
+                        <div style={{ fontSize: 12, color: theme.secondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{album.artist}{album.year ? ` · ${album.year}` : ""}</div>
+                      </div>
+                      <div style={{ textAlign: "center", fontSize: 12.5, color: MUTED }}>{album._songs.length}</div>
+                      <div style={{ textAlign: "center" }}>
+                        {activeList.showScore && (
+                          activeList.albumScoreMethod === "overall" ? (
+                            <input className="score-input" type="number" max={scoreScale} value={album.score ?? ""} placeholder="—"
+                              onChange={(e) => setAlbumScore(album.id, e.target.value)} />
+                          ) : (
+                            <span className="score-input" title="Average of ranked songs in this album" style={{ cursor: "help" }}>{score != null ? score : "—"}</span>
+                          )
+                        )}
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        {activeList.showTier && (
+                          activeList.tierNames?.length ? (
+                            <select className="tier-input" style={{ color: tierColorFor(activeList, tierVal) }} value={tierVal} onChange={(e) => setAlbumTier(album.id, e.target.value)}>
+                              <option value="">—</option>
+                              {activeList.tierNames.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+                            </select>
+                          ) : (
+                            <input className="tier-input" style={{ background: "transparent", border: "1px solid transparent" }} value={tierVal} placeholder="—" onChange={(e) => setAlbumTier(album.id, e.target.value)} />
+                          )
+                        )}
+                      </div>
+                      <button className="kp-btn-ghost" style={{ padding: 6, border: "none" }} onClick={() => setExpandedId(isExpanded ? null : album.id)}>
+                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div style={{ padding: "0 16px 16px" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+                        {(album.awards || []).map((a, i) => (
+                          <span key={i} className="award-badge" title={a.label || ""}>{a.emoji}</span>
+                        ))}
+                        <div style={{ position: "relative", display: "inline-block" }}>
+                          <button className="kp-input" style={{ width: 32, padding: 4, cursor: "pointer" }} onClick={() => setAwardPickerFor(awardPickerFor === album.id ? null : album.id)}>{draft.emoji}</button>
+                          {awardPickerFor === album.id && <div className="emoji-grid" style={{ top: 36, left: 0 }}>{AWARD_EMOJIS.map((e) => <button key={e} onClick={() => { addAlbumAward(album.id, e, ""); setAwardPickerFor(null); }}>{e}</button>)}</div>}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 11, color: MUTED, marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Songs on this album</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {album._songs.map((s) => (
+                          <div key={s.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "4px 0", borderBottom: `1px solid ${BORDER}` }}>
+                            <span style={{ color: TEXT }}>{s.title}</span>
+                            <span style={{ color: MUTED }}>{effectiveScore(activeList, s) ?? "—"}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -8269,11 +8461,47 @@ export default function KpopRanker() {
       {showNewList && (
         <Modal title="Create a new list" onClose={() => setShowNewList(false)}>
           <input className="kp-input" placeholder="List name" value={newListName} onChange={(e) => setNewListName(e.target.value)} style={{ marginBottom: 10 }} autoFocus />
-          <input className="kp-input" placeholder="Tags — comma separated, optional" value={newListTags} onChange={(e) => setNewListTags(e.target.value)} style={{ marginBottom: 10 }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          <input className="kp-input" placeholder="Tags — comma separated, optional" value={newListTags} onChange={(e) => setNewListTags(e.target.value)} style={{ marginBottom: 14 }} />
+
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontWeight: 600 }}>List Type</div>
+          <div className="mode-toggle" style={{ marginBottom: 14 }}>
+            <button className={newListType === "standard" ? "active" : ""} onClick={() => setNewListType("standard")}>Standard</button>
+            <button className={newListType === "albums-only" ? "active" : ""} onClick={() => setNewListType("albums-only")}>Albums Only</button>
+          </div>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 16 }}>
+            {newListType === "standard" ? "Rank individual songs, with albums as metadata." : "Rank whole albums instead of individual songs — clicking one shows all the songs in it."}
+          </div>
+
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontWeight: 600 }}>Score options</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
             <span style={{ fontSize: 12, color: MUTED }}>Max Score</span>
             <input className="kp-input" type="number" min={1} max={1000} style={{ width: 90 }} value={newListScale} onChange={(e) => setNewListScale(Math.max(1, Math.min(1000, Number(e.target.value) || 1)))} />
+            <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, color: MUTED, cursor: "pointer" }}>
+              <input type="checkbox" checked={newListShowScore} onChange={(e) => setNewListShowScore(e.target.checked)} /> Show score
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, color: MUTED, cursor: "pointer" }}>
+              <input type="checkbox" checked={newListShowTier} onChange={(e) => setNewListShowTier(e.target.checked)} /> Show tier
+            </label>
           </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: MUTED, cursor: "pointer", marginBottom: 6 }}>
+            <input type="checkbox" checked={newListArtFade} onChange={(e) => setNewListArtFade(e.target.checked)} /> Show album art fade in list
+          </label>
+
+          <button onClick={() => setShowCreateMoreOptions(!showCreateMoreOptions)}
+            style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", color: theme.secondary, fontSize: 12, cursor: "pointer", padding: "6px 0 12px", fontWeight: 600 }}>
+            {showCreateMoreOptions ? <ChevronUp size={13} /> : <ChevronDown size={13} />} More options
+          </button>
+
+          {showCreateMoreOptions && (
+            <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 14, marginBottom: 14 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: MUTED, cursor: "pointer" }}>
+                <input type="checkbox" checked={newListAdvanced} onChange={(e) => setNewListAdvanced(e.target.checked)} /> Advanced scoring (rate by category instead of one overall score)
+              </label>
+              <div style={{ fontSize: 11, color: MUTED, marginTop: 6 }}>You can always change any of these later from the list's own settings.</div>
+            </div>
+          )}
+
           <button className="kp-btn" onClick={createList}>Create list</button>
         </Modal>
       )}
@@ -8474,7 +8702,7 @@ export default function KpopRanker() {
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 20 }}>{rankMode === "detailed" ? "Adding songs or an album steps through them one at a time so you can score, tier, note, and award each before moving on." : "Adding songs or an album opens a quick confirm step, then adds them all at once."}</div>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontWeight: 600 }}>Theme</div>
           <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-            {[["background", "Background"], ["accent", "Accent"], ["secondary", "Secondary"], ["highlight", "Score color"]].map(([key, label]) => (
+            {[["background", "Background"], ["card", "List piece"], ["text", "Text"], ["accent", "Accent"], ["secondary", "Secondary"], ["highlight", "Score color"]].map(([key, label]) => (
               <div key={key} style={{ textAlign: "center" }}>
                 <input type="color" value={theme[key]} onChange={(e) => saveTheme({ ...theme, [key]: e.target.value })} />
                 <div style={{ fontSize: 11, color: MUTED, marginTop: 6 }}>{label}</div>
