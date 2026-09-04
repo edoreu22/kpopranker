@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import * as XLSX from "xlsx";
 import { shareList, fetchSharedList } from "./supabaseClient";
 import {
   Plus, X, Music, ChevronDown, ChevronUp, Trash2, Settings, RotateCcw,
@@ -6064,7 +6065,7 @@ export default function KpopRanker() {
     setShareLoading(true);
     setShareError("");
     try {
-      const id = await shareList(activeList);
+      const id = await shareList({ ...activeList, createdBy: username || "" });
       const link = `${window.location.origin}${window.location.pathname}?share=${id}`;
       setShareLink(link);
     } catch (e) {
@@ -6076,7 +6077,8 @@ export default function KpopRanker() {
   function importSharedList() {
     if (!sharedView?.list) return;
     const id = `list-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const imported = { ...sharedView.list, id, name: `${sharedView.list.name} (shared)`, createdAt: Date.now() };
+    const suffix = sharedView.list.createdBy ? sharedView.list.createdBy : "shared";
+    const imported = { ...sharedView.list, id, name: `${sharedView.list.name} (${suffix})`, createdAt: Date.now() };
     const updated = [...lists, imported];
     setLists(updated);
     window.storage.set("kpop-lists", JSON.stringify(updated), true).catch(() => {});
@@ -6241,6 +6243,20 @@ export default function KpopRanker() {
       songs: rows,
     };
     const filenameBase = activeList.name.replace(/[^a-z0-9]+/gi, "_");
+    if (format === "xlsx") {
+      const sheetRows = rows.map((r) => ({
+        Rank: r.rank, Title: r.title, Artist: r.artist, Album: r.album || "", Year: r.year || "",
+        Score: r.score ?? "", Tier: r.tier || "",
+        Awards: r.awards.map((a) => a.emoji + (a.highlighted ? " (highlighted)" : "")).join(", "),
+        Notes: r.notes.map((n) => `${n.text} — ${n.author}`).join(" | "),
+      }));
+      const ws = XLSX.utils.json_to_sheet(sheetRows);
+      ws["!cols"] = [{ wch: 6 }, { wch: 28 }, { wch: 20 }, { wch: 22 }, { wch: 6 }, { wch: 7 }, { wch: 8 }, { wch: 24 }, { wch: 30 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Ranking");
+      XLSX.writeFile(wb, `${filenameBase}.xlsx`);
+      return;
+    }
     let blob, filename;
     if (format === "txt") {
       const lines = rows.map((r) => {
@@ -6372,8 +6388,33 @@ export default function KpopRanker() {
   function handleImportFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const isXlsx = file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls");
     const reader = new FileReader();
     reader.onload = () => {
+      if (isXlsx) {
+        try {
+          const wb = XLSX.read(reader.result, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws);
+          const newSongs = rows.map((r) => {
+            const awardsRaw = String(r.Awards || r.awards || "").trim();
+            const awards = awardsRaw ? awardsRaw.split(",").map((a) => a.trim()).filter(Boolean).map((a) => {
+              const highlighted = a.includes("(highlighted)");
+              const emoji = a.replace("(highlighted)", "").trim();
+              return { emoji, label: "", highlighted };
+            }) : [];
+            return makeSongObj({
+              title: r.Title || r.title, artist: r.Artist || r.artist, album: r.Album || r.album,
+              year: r.Year || r.year, score: r.Score ?? r.score, tier: r.Tier || r.tier, awards,
+            });
+          }).filter((s) => s.title);
+          if (!newSongs.length) { setError("No songs found in that spreadsheet."); return; }
+          updateActiveSongs((songs) => [...newSongs, ...songs]);
+          recordAdd(`Imported ${newSongs.length} song${newSongs.length === 1 ? "" : "s"}`, newSongs.map((s) => s.id));
+          setShowImport(false);
+        } catch (err) { setError("Couldn't read that spreadsheet — make sure it's a .xlsx file exported from this app or a similar format."); }
+        return;
+      }
       const text = String(reader.result || "");
       if (file.name.toLowerCase().endsWith(".json")) {
         try {
@@ -6402,7 +6443,8 @@ export default function KpopRanker() {
         }
       }
     };
-    reader.readAsText(file);
+    if (isXlsx) reader.readAsArrayBuffer(file);
+    else reader.readAsText(file);
     e.target.value = "";
   }
 
@@ -6922,52 +6964,7 @@ export default function KpopRanker() {
       .catch(() => tryWikipediaPhoto());
   }
 
-  if (loading) return <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: MUTED, fontFamily: "Inter, sans-serif" }}>Loading…</div></div>;
-
-  if (sharedViewStatus === "loading") {
-    return <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: MUTED, fontFamily: "Inter, sans-serif" }}>Loading shared list…</div></div>;
-  }
-  if (sharedViewStatus === "notfound") {
-    return (
-      <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, fontFamily: "Inter, sans-serif", padding: 20, textAlign: "center" }}>
-        <div style={{ color: TEXT, fontSize: 16, fontWeight: 700 }}>This link has expired or doesn't exist</div>
-        <div style={{ color: MUTED, fontSize: 13 }}>Shared list links expire automatically after 30 days.</div>
-        <button className="kp-btn" style={{ background: theme.accent, marginTop: 8 }} onClick={() => { setSharedViewStatus("idle"); window.history.replaceState({}, "", window.location.pathname); }}>Go to my lists</button>
-      </div>
-    );
-  }
-  if (sharedView) {
-    const preview = computeRanks(sharedView.list).sort((a, b) => a.rank - b.rank);
-    return (
-      <div style={{ background: theme.background, minHeight: "100vh", fontFamily: "'Inter', sans-serif", color: TEXT, padding: "24px 16px" }}>
-        <div style={{ maxWidth: 640, margin: "0 auto" }}>
-          <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Shared list</div>
-          <div className="display" style={{ fontSize: 28, marginBottom: 4 }}>{sharedView.list.name}</div>
-          <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 18 }}>{preview.length} song{preview.length === 1 ? "" : "s"} · view only until you import it</div>
-          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-            <button className="kp-btn" style={{ background: theme.accent }} onClick={importSharedList}>Import to my lists</button>
-            <button className="kp-btn-ghost" onClick={() => { setSharedView(null); window.history.replaceState({}, "", window.location.pathname); }}>Not now</button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {preview.map((song) => (
-              <div key={song.id} style={{ display: "flex", alignItems: "center", gap: 12, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 14px" }}>
-                <div style={{ width: 28, textAlign: "center", fontFamily: "'Bebas Neue', sans-serif", fontSize: 18, color: theme.highlight }}>{song.rank}</div>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.title}</div>
-                  <div style={{ fontSize: 12, color: theme.secondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</div>
-                </div>
-                {song._score != null && <div style={{ fontSize: 13, color: MUTED, fontWeight: 600 }}>{song._score}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ background: theme.background, minHeight: "100vh", fontFamily: "'Inter', sans-serif", color: TEXT }}>
-      <style>{`
+  const globalStyles = `
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap');
         .display { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.02em; }
         .kp-input { background: #26223A; border: 1px solid ${BORDER}; color: ${TEXT}; border-radius: 8px; padding: 10px 12px; font-family: 'Inter', sans-serif; font-size: 14px; width: 100%; outline: none; }
@@ -7070,7 +7067,96 @@ export default function KpopRanker() {
         .gallery-back-section { font-size: 9.5px; color: ${MUTED}; text-transform: uppercase; letter-spacing: 0.05em; margin: 6px 0 3px; font-weight: 700; }
         .gallery-back-award { font-size: 11px; margin-bottom: 2px; }
         .gallery-back-note { font-size: 10.5px; background: #26223A; border-radius: 5px; padding: 4px 6px; margin-bottom: 4px; }
-      `}</style>
+  `;
+
+  if (loading) return <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: MUTED, fontFamily: "Inter, sans-serif" }}>Loading…</div></div>;
+
+  if (sharedViewStatus === "loading") {
+    return <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}><div style={{ color: MUTED, fontFamily: "Inter, sans-serif" }}>Loading shared list…</div></div>;
+  }
+  if (sharedViewStatus === "notfound") {
+    return (
+      <div style={{ background: theme.background, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12, fontFamily: "Inter, sans-serif", padding: 20, textAlign: "center" }}>
+        <div style={{ color: TEXT, fontSize: 16, fontWeight: 700 }}>This link has expired or doesn't exist</div>
+        <div style={{ color: MUTED, fontSize: 13 }}>Shared list links expire automatically after 30 days.</div>
+        <button className="kp-btn" style={{ background: theme.accent, marginTop: 8 }} onClick={() => { setSharedViewStatus("idle"); window.history.replaceState({}, "", window.location.pathname); }}>Go to my lists</button>
+      </div>
+    );
+  }
+  useEffect(() => {
+    if (!sharedView?.list) return;
+    (sharedView.list.songs || []).forEach((song) => {
+      if (!song.bgImage) ensureAlbumArt(song.artist, song.album || song.title);
+    });
+  }, [sharedView, albumArt]);
+
+  function sharedEffectiveBg(song) {
+    if (song.bgImage) return song.bgImage;
+    if (!sharedView.list.autoAlbumArt) return "";
+    const key = `${song.artist}|${song.album || song.title}`.toLowerCase();
+    return albumArt[key] || "";
+  }
+
+  if (sharedView) {
+    const list = sharedView.list;
+    const preview = computeRanks(list).sort((a, b) => a.rank - b.rank);
+    return (
+      <div style={{ background: theme.background, minHeight: "100vh", fontFamily: "'Inter', sans-serif", color: TEXT, padding: "24px 16px" }}>
+        <style>{globalStyles}</style>
+        <div style={{ maxWidth: 760, margin: "0 auto" }}>
+          <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Shared list{list.createdBy ? ` · by ${list.createdBy}` : ""}</div>
+          <div className="display" style={{ fontSize: 32, marginBottom: 4 }}>{list.name}</div>
+          <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 18 }}>{preview.length} song{preview.length === 1 ? "" : "s"} · view only until you import it</div>
+          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <button className="kp-btn" style={{ background: theme.accent }} onClick={importSharedList}>Import to my lists</button>
+            <button className="kp-btn-ghost" onClick={() => { setSharedView(null); window.history.replaceState({}, "", window.location.pathname); }}>Not now</button>
+          </div>
+
+          <div className="kp-row" style={{ padding: "0 14px 8px", fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <span>Rank</span><span>Song / Artist</span><span className="col-album">Album</span>
+            <span style={{ textAlign: "center" }}>{list.showScore ? "Score" : ""}</span>
+            <span style={{ textAlign: "center" }}>{list.showTier ? "Tier" : ""}</span>
+            <span></span><span></span><span></span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {preview.map((song, idx) => {
+              const score = song._score;
+              const rankColor = song.rank === 1 ? GOLD : song.rank === 2 ? SILVER : song.rank === 3 ? BRONZE : theme.highlight;
+              const tierVal = displayTier(list, song, score);
+              const art = sharedEffectiveBg(song);
+              return (
+                <div key={song.id} className="kp-row-wrap" style={{ background: art ? "transparent" : idx % 2 === 0 ? CARD : ROW_ALT }}>
+                  <div className="kp-row-collapsed">
+                    {art && <div className="kp-row-bg"><BgImg src={art} /><div className="dim" /></div>}
+                    <div className="kp-row" style={{ padding: "12px 14px" }}>
+                      <div className="rank-cell">
+                        <div className="display" style={{ color: rankColor, fontSize: 20 }}>{song.rank}</div>
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.title}</div>
+                        <div style={{ fontSize: 12, color: theme.secondary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.artist}</div>
+                      </div>
+                      <span className="col-album" style={{ fontSize: 12.5, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{song.album}</span>
+                      <div style={{ textAlign: "center", fontWeight: 700, color: score != null ? theme.highlight : MUTED }}>{list.showScore ? (score != null ? score : "—") : ""}</div>
+                      <div style={{ textAlign: "center", fontWeight: 700, color: tierVal && tierVal !== "NULL" ? tierColorFor(list, tierVal) : MUTED }}>{list.showTier ? (tierVal !== "NULL" ? tierVal : "—") : ""}</div>
+                      <div />
+                      <div />
+                      <div />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: theme.background, minHeight: "100vh", fontFamily: "'Inter', sans-serif", color: TEXT }}>
+      <style>{globalStyles}</style>
 
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "36px 20px 80px" }}>
         {/* Header */}
@@ -7155,11 +7241,13 @@ export default function KpopRanker() {
 
             {activeList.songs.length > 0 && (
               <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-                <input className="kp-input" placeholder="Search this list…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <div style={{ position: "relative", flex: 1 }}>
+                  <input className="kp-input" placeholder="Search this list…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingRight: 40 }} />
+                  <button className="search-inline-icon" style={filterAwardsOnly ? { color: theme.accent } : {}} title="Show only songs with awards" onClick={() => setFilterAwardsOnly(!filterAwardsOnly)}><Award size={16} /></button>
+                </div>
                 <button className="icon-btn icon-btn-tall" title="Toggle view" onClick={() => saveViewMode(viewMode === "list" ? "gallery" : "list")}>
                   {viewMode === "list" ? <List size={15} /> : <LayoutGrid size={15} />}
                 </button>
-                <button className={`icon-btn icon-btn-tall ${filterAwardsOnly ? "active" : ""}`} style={filterAwardsOnly ? { color: theme.accent, borderColor: theme.accent } : {}} title="Show only songs with awards" onClick={() => setFilterAwardsOnly(!filterAwardsOnly)}><Award size={15} /></button>
               </div>
             )}
           </>
@@ -7460,6 +7548,7 @@ export default function KpopRanker() {
             <div style={{ display: "flex", gap: 8 }}>
               <button className="kp-btn-ghost" onClick={() => exportList("json")}><Download size={13} /> Export .json</button>
               <button className="kp-btn-ghost" onClick={() => exportList("txt")}><Download size={13} /> Export .txt</button>
+              <button className="kp-btn-ghost" onClick={() => exportList("xlsx")}><Download size={13} /> Export .xlsx</button>
             </div>
           </div>
         </Modal>
@@ -7468,10 +7557,10 @@ export default function KpopRanker() {
       {showImport && (
         <Modal title="Import list" onClose={() => setShowImport(false)} wide>
           <label className="kp-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 12, cursor: "pointer" }}>
-            <Download size={13} style={{ transform: "rotate(180deg)" }} /> Upload .txt or .json file
-            <input type="file" accept=".txt,.json,text/plain,application/json" style={{ display: "none" }} onChange={handleImportFile} />
+            <Download size={13} style={{ transform: "rotate(180deg)" }} /> Upload .txt, .json, or .xlsx file
+            <input type="file" accept=".txt,.json,.xlsx,.xls,text/plain,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style={{ display: "none" }} onChange={handleImportFile} />
           </label>
-          <div style={{ fontSize: 11, color: MUTED, marginBottom: 14 }}>.json files exported from this app import fully, including awards and notes. .txt files import title/artist/album/year/score/tier.</div>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 14 }}>.json files exported from this app import fully, including awards and notes. .xlsx and .txt files import title/artist/album/year/score/tier (and awards, for .xlsx).</div>
           <div style={{ fontSize: 12, color: theme.secondary, marginBottom: 4, fontWeight: 600 }}>Or paste directly — Song, Artist, Album, Year, Score, Tier</div>
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 10 }}>One per line. Tabs from a spreadsheet paste work automatically.</div>
           <textarea className="kp-input" style={{ minHeight: 160, resize: "vertical", fontFamily: "monospace", fontSize: 12.5, lineHeight: 1.6 }} placeholder={"I Want U, SHINee, The Story of Light, 2016, 95, X"} value={bulkText} onChange={(e) => setBulkText(e.target.value)} />
