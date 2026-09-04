@@ -1195,10 +1195,19 @@ const SEED_SONGS = [
   ["Magic Island (Japanese Ver.)", "TXT", "SWEET", 2023],
   ["Boy With Luv (Japanese Ver.)", "TXT", "SWEET", 2023],
   ["Outro : Falling", "TXT", "SWEET", 2023],
+  // TXT — was missing everything from 2024 onward. Filling the gap.
+  ["Deja Vu", "TXT", "minisode 3: Tomorrow", 2024],
+  ["Over the Moon", "TXT", "The Star Chapter: Sanctuary", 2024],
+  ["Love Language", "TXT", "Love Language", 2025],
+  ["When the Day Comes", "TXT", "Resident Playbook OST", 2025],
+  ["Beautiful Strangers", "TXT", "The Star Chapter: Together", 2025],
+  ["Can't Stop", "TXT", "Starkissed", 2025],
+  ["SSS (Sending Secret Signals) (feat. HYDE)", "TXT", "SSS (Sending Secret Signals)", 2026],
   ["God's Menu (Japanese Ver.)", "Stray Kids", "ALL IN", 2020],
   ["Back Door (Japanese Ver.)", "Stray Kids", "ALL IN", 2020],
   ["Top (Japanese Ver.)", "Stray Kids", "ALL IN", 2020],
   ["Slump (Japanese Ver.)", "Stray Kids", "ALL IN", 2020],
+  ["Circus", "Stray Kids", "CIRCUS", 2022],
   ["Venom (Japanese Ver.)", "Stray Kids", "CIRCUS", 2022],
   ["Maniac (Japanese Ver.)", "Stray Kids", "CIRCUS", 2022],
   ["Silent Cry (Japanese Ver.)", "Stray Kids", "CIRCUS", 2022],
@@ -1220,6 +1229,7 @@ const SEED_SONGS = [
   ["Walkin On Water (Hiphop Ver.)", "Stray Kids", "SKZHOP HIPTAPE - HOP", 2024],
   ["Muted", "Stray Kids", "SKZHOP HIPTAPE - HOP", 2024],
   ["So Good", "Stray Kids", "SKZHOP HIPTAPE - HOP", 2024],
+  ["Ceremony", "Stray Kids", "KARMA", 2025],
   ["Apocalypse", "Stray Kids", "KARMA", 2025],
   ["Fever", "Stray Kids", "KARMA", 2025],
   ["Wildfire", "Stray Kids", "KARMA", 2025],
@@ -1230,6 +1240,13 @@ const SEED_SONGS = [
   ["Holiday", "Stray Kids", "SKZ IT TAPE: DO IT", 2025],
   ["Photobook", "Stray Kids", "SKZ IT TAPE: DO IT", 2025],
   ["Do It (Festival Version)", "Stray Kids", "SKZ IT TAPE: DO IT", 2025],
+  ["Night", "Stray Kids", "Giant", 2024],
+  ["Falling Up", "Stray Kids", "Giant", 2024],
+  ["Giant", "Stray Kids", "Giant", 2024],
+  ["Hollow", "Stray Kids", "Hollow", 2025],
+  ["Parade", "Stray Kids", "Hollow", 2025],
+  ["Stay", "Stray Kids", "SKZ-Replay 2026 Pt.1", 2026],
+  ["SUIATSU", "Stray Kids", "SUIATSU", 2026],
   ["RUN IT", "Stray Kids", "THIS & THAT", 2026],
   ["After You", "Stray Kids", "THIS & THAT", 2026],
   ["FARMING", "Stray Kids", "THIS & THAT", 2026],
@@ -2000,8 +2017,20 @@ const SEED_SONGS = [
   ["REVIVE", "BLACKPINK", "REVIVE", 2026],
   ["SOLO", "Jennie", "SOLO", 2018],
   ["You & Me", "Jennie", "You & Me", 2023],
-  ["Mantra", "Jennie", "Mantra", 2024],
-  ["ZENITH", "Jennie", "ZENITH", 2025],
+  ["Mantra", "Jennie", "Ruby", 2024],
+  ["Intro: Jane (with FKJ)", "Jennie", "Ruby", 2025],
+  ["like JENNIE", "Jennie", "Ruby", 2025],
+  ["start a war", "Jennie", "Ruby", 2025],
+  ["Handlebars (feat. Dua Lipa)", "Jennie", "Ruby", 2025],
+  ["with the JE (way up)", "Jennie", "Ruby", 2025],
+  ["ExtraL (feat. Doechii)", "Jennie", "Ruby", 2025],
+  ["Love Hangover (feat. Dominic Fike)", "Jennie", "Ruby", 2025],
+  ["ZEN", "Jennie", "Ruby", 2025],
+  ["Damn Right (feat. Childish Gambino and Kali Uchis)", "Jennie", "Ruby", 2025],
+  ["F.T.S.", "Jennie", "Ruby", 2025],
+  ["Filter", "Jennie", "Ruby", 2025],
+  ["Seoul City", "Jennie", "Ruby", 2025],
+  ["Starlight", "Jennie", "Ruby", 2025],
   ["Flower", "Jisoo", "ME", 2023],
   ["All Eyes On Me", "Jisoo", "ME", 2023],
   ["Earthquake", "Jisoo", "AMORTALS", 2025],
@@ -2398,6 +2427,8 @@ const SEED_SONGS = [
   ["Crossroads", "GFRIEND", "Labyrinth", 2020],
   ["Apple", "GFRIEND", "Song of the Sirens", 2020],
   ["Mago", "GFRIEND", "Walpurgis Night", 2020],
+  ["Season of Memories", "GFRIEND", "Season of Memories", 2025],
+  ["Always", "GFRIEND", "Season of Memories", 2025],
   ["Puzzle Moon", "GWSN", "The Park in the Night Part.1", 2018],
   ["Pinky Star", "GWSN", "The Park in the Night Part.2", 2019],
   ["Red-Sun", "GWSN", "The Park in the Night Part.3", 2019],
@@ -2690,6 +2721,7 @@ const SEED_SONGS = [
   ["Gabriela", "KATSEYE", "Gabriela", 2025],
   ["Astronaut", "KATSEYE", "Be Strong", 2025],
   ["Siren", "KATSEYE", "Siren", 2026],
+  ["Iconic by Mistake", "KATSEYE", "Iconic by Mistake", 2026],
   ["Intro", "KiiiKiii", "KiiiKiii", 2025],
   ["Sweet Dream", "KiiiKiii", "Sweet Dream", 2025],
   ["Make It Bounce", "KiiiKiii", "Make It Bounce", 2026],
@@ -3840,11 +3872,14 @@ const SEED_SONGS = [
   ["GRL GVNG", "XG", "NEW DNA", 2023],
   ["WOKE UP", "XG", "WOKE UP", 2024],
   ["SOMETHING AIN'T RIGHT", "XG", "AWE", 2024],
-  ["BIZCOCHITO", "XG", "BIZCOCHITO", 2025],
-  ["SUPERIOR", "XG", "SUPERIOR", 2025],
   ["XIGNAL (The Intro)", "XG", "THE CORE", 2026],
   ["In Bloom", "ZEROBASEONE", "YOUTH IN THE SHADE", 2023],
   ["MELTING POINT", "ZEROBASEONE", "MELTING POINT", 2023],
+  ["Crush", "ZEROBASEONE", "MELTING POINT", 2023],
+  ["Yura Yura (Unmei no Hana)", "ZEROBASEONE", "Yura Yura (Unmei no Hana)", 2024],
+  ["Feel the POP", "ZEROBASEONE", "You had me at HELLO", 2024],
+  ["Only One Story", "ZEROBASEONE", "Prezent", 2024],
+  ["LUV LUV LUV", "ZEROBASEONE", "My Love from the Star OST", 2025],
   ["Yura Yura", "ZEROBASEONE", "Yura Yura", 2024],
   ["SWEAT", "ZEROBASEONE", "You had me at HELLO", 2024],
   ["GOOD SO BAD", "ZEROBASEONE", "CINEMA PARADISE", 2024],
@@ -3858,7 +3893,8 @@ const SEED_SONGS = [
   ["I.P.U.", "WANNAONE", "0+1=1 (I PROMISE YOU)", 2018],
   ["Light", "WANNAONE", "1÷x=1 (UNDIVIDED)", 2018],
   ["Spring Breeze", "WANNAONE", "11=1 (POWER OF DESTINY)", 2018],
-  ["B-Side", "WANNAONE", "B-Side", 2022],
+  ["Beautiful, Pt. 3", "WANNAONE", "B-Side", 2022],
+  ["Again, Spring Breeze", "WANNAONE", "WANNA ONE GO: Back to Base OST", 2026],
   ["Aside", "Yoon Ji-sung", "Aside", 2019],
   ["Dear Diary", "Yoon Ji-sung", "Dear diary", 2019],
   ["Love Song", "Yoon Ji-sung", "Temperature of Love", 2021],
@@ -3987,6 +4023,7 @@ const SEED_SONGS = [
   ["So Cynical (Badum)", "LE SSERAFIM", "Hot", 2025],
   ["Boompala", "LE SSERAFIM", "Boompala", 2026],
   ["Pureflow", "LE SSERAFIM", "Pureflow, Pt. 1", 2026],
+  ["Iconic by Mistake", "LE SSERAFIM", "Iconic by Mistake", 2026],
   ["Pit Stop", "NJZ", "Pit Stop", 2025],
   ["If I Say, I Love You", "BOYNEXTDOOR", "If I Say, I Love You", 2025],
   ["I Feel Good", "BOYNEXTDOOR", "No Genre", 2025],
@@ -4090,6 +4127,24 @@ const SEED_SONGS = [
   ["You and I", "The Boyz", "a;effect", 2025],
   ["Constellation", "The Boyz", "a;effect", 2025],
   ["Aura", "The Boyz", "a;effect", 2025],
+  // QWER — previously missing entirely.
+  ["Harmony of Stars", "QWER", "Harmony from Discord", 2023],
+  ["Secret Diary", "QWER", "Harmony from Discord", 2023],
+  ["Discord", "QWER", "Harmony from Discord", 2023],
+  ["Discord (TAK Remix)", "QWER", "Discord (TAK Remix)", 2023],
+  ["고민중독 (Gomin Jungdok)", "QWER", "MANITO", 2024],
+  ["SODA", "QWER", "MANITO", 2024],
+  ["가짜 아이돌 (Fake Idol)", "QWER", "Algorithm's Blossom", 2024],
+  ["My Name Is Malguem", "QWER", "Algorithm's Blossom", 2024],
+  ["Anima Power", "QWER", "Algorithm's Blossom", 2024],
+  ["Youth Promise", "QWER", "In a million noises, I'll be your harmony", 2025],
+  ["Play, We, Dew", "QWER", "In a million noises, I'll be your harmony", 2025],
+  ["Dear", "QWER", "In a million noises, I'll be your harmony", 2025],
+  ["Blue Whale", "QWER", "In a million noises, I'll be your harmony", 2025],
+  ["Discord (Japanese Ver.)", "QWER", "Discord (Japanese Ver.)", 2025],
+  ["Our Voyage", "QWER", "Ceremony", 2026],
+  ["Show Down", "QWER", "Show Down", 2026],
+  ["To Be Continued", "QWER", "To Be Continued", 2026],
   // Bulk catalog expansion — soloists, duos, sub-units, and survival/reality show
   // original songs (Produce 101 family, I-LAND, Boys/Girls Planet, Queendom Puzzle,
   // R U Next?, Road to Kingdom: Ace of Ace, etc.) cross-referenced against the
@@ -5698,6 +5753,80 @@ const SEED_SONGS = [
   ["Klaxon", "I-dle", "I Sway", 2024],
   ["Good Thing", "I-dle", "We Are", 2025],
   ["Gimme Dat Love", "I-dle", "We Made", 2026],
+  // XngHan&Xoul — solo artist brand of former RIIZE member Seunghan; previously missing entirely.
+  ["Waste No Time", "XngHan&Xoul", "Waste No Time", 2025],
+  ["Heavenly Blue", "XngHan&Xoul", "Waste No Time", 2025],
+  ["Glow", "XngHan&Xoul", "Glow", 2026],
+  ["Who Knew?", "XngHan&Xoul", "High Beam", 2026],
+  ["High Beam", "XngHan&Xoul", "High Beam", 2026],
+  // AOEN — Japanese boy group under HYBE Japan's Jconic label; very new (debuted Jun 2025).
+  ["The Blue Sun", "AOEN", "The Blue Sun", 2025],
+  // ATBO — IST Entertainment boy group (2022-2025, disbanded); previously missing entirely.
+  ["7ibe (Vibe)", "ATBO", "The Beginning: 開花", 2022],
+  ["Monochrome (Color)", "ATBO", "The Beginning: 開花", 2022],
+  ["Graffiti", "ATBO", "The Beginning: 開花", 2022],
+  ["High Five", "ATBO", "The Beginning: 開花", 2022],
+  ["WoW", "ATBO", "The Beginning: 開花", 2022],
+  ["Run", "ATBO", "The Beginning: 開花", 2022],
+  ["Attitude", "ATBO", "The Beginning: 始作", 2022],
+  ["Time to Go!", "ATBO", "The Beginning: 始作", 2022],
+  ["Magic", "ATBO", "The Beginning: 始作", 2022],
+  ["Boost", "ATBO", "The Beginning: 始作", 2022],
+  ["The Way", "ATBO", "The Beginning: 始作", 2022],
+  ["Good Vibes Only", "ATBO", "The Beginning: 始作", 2022],
+  ["Next to Me", "ATBO", "The Beginning: 飛上", 2023],
+  ["Bounce", "ATBO", "The Beginning: 飛上", 2023],
+  ["Just Dance", "ATBO", "The Beginning: 飛上", 2023],
+  ["사랑해줘", "ATBO", "The Beginning: 飛上", 2023],
+  ["Good Thing (굿 띵)", "ATBO", "The Beginning: 飛上", 2023],
+  ["Just for Us", "ATBO", "The Beginning: 飛上", 2023],
+  // HENRY — former Super Junior-M member, solo artist under SM Town; previously missing entirely.
+  ["Trap (feat. Kyuhyun and Taemin)", "HENRY", "Trap", 2013],
+  ["1-4-3 (I Love You) (feat. Amber)", "HENRY", "Trap", 2013],
+  ["Fantastic", "HENRY", "Fantastic", 2014],
+  ["Runnin' (with Soyou)", "HENRY", "SM Station", 2016],
+  ["Girlfriend", "HENRY", "Girlfriend", 2017],
+  ["Real Love", "HENRY", "Real Love", 2017],
+  ["It's You", "HENRY", "While You Were Sleeping OST", 2017],
+  // TUNEXX — IST Entertainment boy group, debuting March 2026; very new.
+  ["Proof That I'm Alive", "TUNEXX", "Set By Us Only", 2026],
+  ["100%", "TUNEXX", "Set By Us Only", 2026],
+  ["Obsessed", "TUNEXX", "Set By Us Only", 2026],
+  ["Twenty Something", "TUNEXX", "Set By Us Only", 2026],
+  // TAEMIN — SHINee member's solo career; previously missing entirely.
+  ["Danger", "TAEMIN", "ACE", 2014],
+  ["Press Your Number", "TAEMIN", "Press It", 2016],
+  ["Goodbye", "TAEMIN", "Goodbye", 2016],
+  ["MOVE", "TAEMIN", "MOVE", 2017],
+  ["Thirsty", "TAEMIN", "Move-ing", 2017],
+  ["WANT", "TAEMIN", "WANT", 2019],
+  ["Never Gonna Dance Again", "TAEMIN", "Never Gonna Dance Again: Act 1", 2020],
+  ["Advice", "TAEMIN", "Advice", 2021],
+  ["Guilty", "TAEMIN", "Guilty", 2023],
+  ["Sexy in the Air", "TAEMIN", "Eternal", 2024],
+  ["Horizon", "TAEMIN", "Eternal", 2024],
+  ["Veil", "TAEMIN", "Veil", 2025],
+  ["Permission", "TAEMIN", "Permission", 2026],
+  // LISA (BLACKPINK) — solo career; previously missing entirely.
+  ["LALISA", "LISA", "LALISA", 2021],
+  ["MONEY", "LISA", "LALISA", 2021],
+  ["SG (feat. Ozuna & Lisa)", "LISA", "Carte Blanche", 2021],
+  ["Rockstar", "LISA", "Alter Ego", 2024],
+  ["New Woman (feat. Rosalía)", "LISA", "Alter Ego", 2024],
+  ["Moonlit Floor (Kiss Me)", "LISA", "Alter Ego", 2024],
+  ["Born Again (feat. Doja Cat & RAYE)", "LISA", "Alter Ego", 2025],
+  ["FXCK UP THE WORLD (feat. Future)", "LISA", "Alter Ego", 2025],
+  ["Rapunzel (feat. Megan Thee Stallion)", "LISA", "Alter Ego", 2025],
+  ["When I'm With You (feat. Tyla)", "LISA", "Alter Ego", 2025],
+  ["Handlebars (feat. Dua Lipa)", "LISA", "Alter Ego", 2025],
+  ["ExtraL (feat. Doechii)", "LISA", "Alter Ego", 2025],
+  ["Love Hangover (feat. Dominic Fike)", "LISA", "Alter Ego", 2025],
+  ["Damn Right (feat. Childish Gambino & Kali Uchis)", "LISA", "Alter Ego", 2025],
+  ["Elastigirl", "LISA", "Alter Ego", 2025],
+  ["Thunder", "LISA", "Alter Ego", 2025],
+  ["Badgrrrl", "LISA", "Alter Ego", 2025],
+  ["Messy", "LISA", "F1 The Movie OST", 2025],
+  ["Bad Angel (with Anyma)", "LISA", "Bad Angel", 2026],
   ["Miniskirt", "AOA", "Miniskirt", 2014],
   ["Short Hair", "AOA", "Short Hair", 2014],
   ["Like a Cat", "AOA", "Like a Cat", 2014],
@@ -5806,6 +5935,15 @@ const SEED_SONGS = [
   ["Cherish (My Love)", "ILLIT", "I'll Like You", 2024],
   ["Tick-Tack", "ILLIT", "I'll Like You", 2024],
   ["Do the Dance", "ILLIT", "Bomb", 2025],
+  ["Jellyous", "ILLIT", "Bomb", 2025],
+  ["Topping", "ILLIT", "Toki Yo Tomare", 2025],
+  ["Toki Yo Tomare", "ILLIT", "Toki Yo Tomare", 2025],
+  ["Not Cute Anymore", "ILLIT", "Not Cute Anymore", 2025],
+  ["Sunday Morning", "ILLIT", "Sunday Morning", 2026],
+  ["Bubee", "ILLIT", "Bubee", 2026],
+  ["It's Me", "ILLIT", "Mamihlapinatapai", 2026],
+  ["I Got Your Back", "ILLIT", "I Got Your Back", 2026],
+  ["Iconic by Mistake", "ILLIT", "Iconic by Mistake", 2026],
   ["O.O", "NMIXX", "Ad Mare", 2022],
   ["Dice", "NMIXX", "Entwurf", 2022],
   ["Love Me Like This", "NMIXX", "Expérgo", 2023],
@@ -5894,6 +6032,20 @@ const SEED_SONGS = [
   ["New Dance", "XG", "New DNA", 2023],
   ["Is This Love", "XG", "Is This Love", 2025],
   ["Gala", "XG", "Gala", 2025],
+  ["TGIF", "XG", "New DNA", 2023],
+  ["Puppet Show", "XG", "New DNA", 2023],
+  ["Something Ain't Right", "XG", "Awe", 2024],
+  ["IYKYK", "XG", "Awe", 2024],
+  ["Howling", "XG", "Awe", 2024],
+  ["In the Rain", "XG", "Awe", 2025],
+  ["Million Places", "XG", "Million Places", 2025],
+  ["4 Seasons", "XG", "The Core", 2025],
+  ["Take My Breath", "XG", "The Core", 2026],
+  ["Up Now", "XG", "The Core", 2026],
+  ["O.R.B. (Obviously Reads Bro)", "XG", "The Core", 2026],
+  ["PS118", "XG", "The Core", 2026],
+  ["Hypnotize", "XG", "The Core", 2026],
+  ["Rock the Boat", "XG", "Rock the Boat", 2026],
 ];
 
 function timeAgo(ts) {
@@ -6024,7 +6176,7 @@ function BgImg({ src }) {
 
 const DEFAULT_LIST = () => ({
   id: "default", name: "All Kpop Songs Ranked", tags: [], createdAt: Date.now(), songs: [],
-  scoreScale: 100, showScore: true, showTier: true, autoArtistImages: false, autoAlbumArt: false, artistImageDim: 60,
+  scoreScale: 100, showScore: true, showTier: true, autoArtistImages: true, autoAlbumArt: false, artistImageDim: 60,
   advancedMode: false, advancedScoreMode: "sum", categories: DEFAULT_CATEGORIES(),
   tierNames: DEFAULT_TIERS(), autoTier: false, autoTierRules: [],
   scoreColorMode: "single", scoreColorSingle: "#FFC857", scoreGradientFrom: "#5FD9C0", scoreGradientTo: "#FF3D7F", scoreColorStops: [],
@@ -6984,6 +7136,8 @@ export default function KpopRanker() {
         .icon-btn { background: transparent; border: 1px solid ${BORDER}; border-radius: 8px; color: ${MUTED}; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
         .icon-btn:hover { color: ${TEXT}; border-color: ${theme.secondary}; }
         .icon-btn-tall { height: 42px; padding: 0 12px; width: auto; }
+        .search-inline-icon { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: none; color: ${MUTED}; cursor: pointer; padding: 8px; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+        .search-inline-icon:hover { background: #2f2a45; color: ${TEXT}; }
         .rank-cell { display: flex; align-items: center; gap: 1px; }
         .rank-lock-toggle { cursor: pointer; flex-shrink: 0; opacity: 0; transition: opacity .15s ease; }
         .rank-cell:hover .rank-lock-toggle.reveal { opacity: 1; }
@@ -7000,19 +7154,19 @@ export default function KpopRanker() {
         input[type="color"] { -webkit-appearance: none; appearance: none; width: 30px; height: 30px; border: none; border-radius: 50%; cursor: pointer; background: none; padding: 0; }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
         input[type="color"]::-webkit-color-swatch { border: 2px solid ${BORDER}; border-radius: 50%; }
-        .kp-row-wrap { position: relative; border-radius: 10px; margin-bottom: 6px; overflow: visible; isolation: isolate; }
+        .kp-row-wrap { position: relative; border-radius: 10px; margin-bottom: 6px; overflow: visible; }
         .kp-row-collapsed { position: relative; border-radius: 10px; overflow: hidden; }
         .kp-row-bg { position: absolute; inset: 0; border-radius: 10px; overflow: hidden; z-index: 0; }
         .kp-row-bg img { width: 100%; height: 100%; object-fit: cover; }
         .kp-row-bg .dim { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
         .artist-fade-bg {
-          position: absolute; top: 0; bottom: 0; left: 0; width: 64px; z-index: 0; border-radius: 10px 0 0 10px;
+          position: absolute; top: 0; bottom: 0; left: 0; width: 52px; z-index: 0; border-radius: 10px 0 0 10px;
           background-size: cover; background-position: center;
-          -webkit-mask-image: linear-gradient(to right, black 0%, black 15%, transparent 60%);
-          mask-image: linear-gradient(to right, black 0%, black 15%, transparent 60%);
+          -webkit-mask-image: linear-gradient(to right, black 0%, black 10%, transparent 75%);
+          mask-image: linear-gradient(to right, black 0%, black 10%, transparent 75%);
         }
         @media (max-width: 760px) {
-          .artist-fade-bg { width: 48px; }
+          .artist-fade-bg { width: 40px; }
         }
         .art-fade-right {
           position: absolute; top: 0; bottom: 0; right: 0; width: 170px; z-index: 0; border-radius: 8px;
@@ -7060,6 +7214,7 @@ export default function KpopRanker() {
         .gallery-artist { position: absolute; top: 8px; left: 6px; right: 6px; text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10.5px; }
         .gallery-title { position: absolute; top: 50%; left: 6px; right: 6px; transform: translateY(-50%); text-align: center; font-family: 'Bebas Neue', sans-serif; line-height: 1.05; font-size: 15px; }
         .gallery-rank { position: absolute; bottom: 8px; left: 8px; font-family: 'Bebas Neue', sans-serif; line-height: 1; font-size: 22px; }
+        .gallery-awards-front { position: absolute; top: 8px; right: 6px; display: flex; gap: 2px; font-size: 12px; }
         .gallery-stats { position: absolute; bottom: 8px; right: 8px; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
         .gallery-tier { font-weight: 700; font-size: 11px; }
         .gallery-score { font-weight: 700; font-size: 13px; }
@@ -7285,6 +7440,9 @@ export default function KpopRanker() {
                     <BgImg src={art} />
                     <div className="gallery-dim" />
                     <div className="gallery-artist" style={{ color: theme.secondary }}>{song.artist}</div>
+                    {awards.length > 0 && (
+                      <div className="gallery-awards-front">{awards.map((a, i) => <span key={i}>{a.emoji}</span>)}</div>
+                    )}
                     <div className="gallery-title" style={{ color: TEXT }}>{song.title}</div>
                     <div className="gallery-rank" style={{ color: rankColor }}>{song.rank}</div>
                     <div className="gallery-stats">
@@ -7292,7 +7450,7 @@ export default function KpopRanker() {
                       <div className="gallery-score" style={{ color: theme.highlight }}>{score != null ? score : "—"}</div>
                     </div>
                   </div>
-                  <div className="gallery-card-back" onClick={(e) => e.stopPropagation()}>
+                  <div className="gallery-card-back">
                     <div style={{ fontWeight: 700, fontSize: 13, color: TEXT, lineHeight: 1.2 }}>{song.title}</div>
                     <div style={{ fontSize: 11, color: theme.secondary, fontWeight: 600 }}>{song.artist}</div>
                     <div style={{ fontSize: 10.5, color: MUTED }}>{song.album || "—"}{song.year ? ` · ${song.year}` : ""}</div>
@@ -7319,7 +7477,7 @@ export default function KpopRanker() {
                     </div>
 
                     {isEditing ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 5 }} onClick={(e) => e.stopPropagation()}>
                         <input className="kp-input" type="number" max={scoreScale} style={{ padding: "5px 7px", fontSize: 11.5 }} placeholder="Score" value={song.score ?? ""}
                           onChange={(e) => updateSongField(song.id, "score", e.target.value === "" ? null : Math.min(scoreScale, Number(e.target.value)))} />
                         <input className="kp-input" style={{ padding: "5px 7px", fontSize: 11.5 }} placeholder="Tier" value={tierVal === "NULL" ? "" : tierVal}
@@ -7327,7 +7485,7 @@ export default function KpopRanker() {
                         <button className="kp-btn" style={{ padding: "5px 0", fontSize: 11.5 }} onClick={() => setGalleryEditId(null)}>Done</button>
                       </div>
                     ) : (
-                      <div style={{ display: "flex", gap: 6 }}>
+                      <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
                         <button className="kp-btn-ghost" style={{ flex: 1, padding: "5px 0", fontSize: 11, justifyContent: "center" }} onClick={() => setGalleryEditId(song.id)}><Pencil size={11} /> Edit</button>
                         <button className="kp-btn-ghost" style={{ flex: 1, padding: "5px 0", fontSize: 11, justifyContent: "center", color: theme.accent, borderColor: theme.accent }} onClick={() => deleteSong(song.id)}><Trash2 size={11} /> Remove</button>
                       </div>
@@ -7338,8 +7496,8 @@ export default function KpopRanker() {
             );
           };
           const top3 = visibleRanked.filter((s) => s.rank <= 3);
-          const mid = visibleRanked.filter((s) => s.rank >= 4 && s.rank <= 10);
-          const rest = visibleRanked.filter((s) => s.rank > 10);
+          const mid = visibleRanked.filter((s) => s.rank >= 4 && s.rank <= 13);
+          const rest = visibleRanked.filter((s) => s.rank > 13);
           return (
             <>
               {top3.length > 0 && <div className="gallery-grid top3">{top3.map(renderCard)}</div>}
