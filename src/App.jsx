@@ -8405,10 +8405,12 @@ export default function KpopRanker() {
 
       {/* Detailed-mode review overlay — used both for adding new songs and working through the Unranked queue */}
       {showReview && reviewQueue.length > 0 && (() => {
+        if (reviewIndex >= reviewQueue.length || reviewQueue[reviewIndex] == null) { setShowReview(false); setReviewQueue([]); setReviewIndex(0); setReviewExisting(false); return null; }
         const currentSong = reviewExisting ? activeList.songs.find((s) => s.id === reviewQueue[reviewIndex]) : null;
         if (reviewExisting && !currentSong) { advanceReview(); return null; }
         const isGroupItem = !reviewExisting && !Array.isArray(reviewQueue[reviewIndex]);
         const currentGroup = isGroupItem ? reviewQueue[reviewIndex] : null;
+        if (isGroupItem && (!currentGroup || !Array.isArray(currentGroup.items))) { advanceReview(); return null; }
         const [title, artist, album, year] = reviewExisting
           ? [currentSong.title, currentSong.artist, currentSong.album, currentSong.year]
           : isGroupItem
