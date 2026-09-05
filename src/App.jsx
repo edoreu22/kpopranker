@@ -6885,6 +6885,8 @@ export default function KpopRanker() {
     if (reviewExisting) {
       const currentSong = activeList.songs.find((s) => s.id === item);
       if (currentSong) ensureAlbumArt(currentSong.artist, currentSong.album || currentSong.title);
+    } else if (item && !Array.isArray(item)) {
+      ensureAlbumArt(item.artist, item.album);
     } else if (item) {
       const [title, artist, album] = item;
       ensureAlbumArt(artist, album || title);
